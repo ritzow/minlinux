@@ -1,21 +1,32 @@
-INITRAMFS_FILE=initramfs.cpio.lz4
+INITRAMFS_FILE=initramfs.cpio
+LINUX_VERSION=linux-5.14
 
-dummy:
-	@echo "Dummy!"
+.PHONY: help
+help:
+	@echo "build: Build the kernel and modules using .config in" $(LINUX_VERSION)
+	@echo "download: Download the linux sources into directory" $(LINUX_VERSION)
 
+.PHONY: build
+build: init-cpio
+	$(MAKE) -C $(LINUX_VERSION) all
+
+.PHONY: init-cpio
 init-cpio:
 	@(cd initramfs && find . -depth -type f) | cpio --verbose --format=newc --create --owner=+0:+0\
-		--device-independent --directory=initramfs | lz4 --force --compress - $(INITRAMFS_FILE)
+		--device-independent --directory=initramfs --file=$(INITRAMFS_FILE)
 
+.PHONY: list-cpio
 list-cpio:
-	@lz4 --decompress --to-stdout $(INITRAMFS_FILE) | cpio --list
+	@cat $(INITRAMFS_FILE) | cpio --list
 
+.PHONY: download
 download: clean
-	@curl -s https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.14.tar.xz | tar --extract --xz -f -
+	@curl -s https://cdn.kernel.org/pub/linux/kernel/v5.x/$(LINUX_VERSION).tar.xz | tar --extract --xz -f -
 
 .PHONY: copy_config
 backup-config:
-	cp linux-5.14/.config backup-$(shell date --iso-8601=seconds).config
+	cp $(LINUX_VERSION)/.config backup-$(shell date --iso-8601=seconds).config
 
+.PHONY: clean
 clean:
 	rm $(INITRAMFS_FILE)
