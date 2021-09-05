@@ -10,6 +10,9 @@ help:
 	echo "build: Build the kernel and modules using .config in" $(LINUX_VERSION)
 	echo "download: Download the linux sources into directory" $(LINUX_VERSION)
 
+kbuild-docs:
+	vim -M linux-5.14/Documentation/kbuild/kbuild.rst
+
 #Build the kernel
 .PHONY: build
 build: init-cpio
@@ -25,6 +28,7 @@ build-modules:
 #Create the initramfs archive file needed by build
 .PHONY: init-cpio
 init-cpio: build-modules
+	$(MAKE) -C $(LINUX_VERSION) INSTALL_MOD_STRIP=1 MODLIB=../initramfs/modules #INSTALL_MOD_PATH=../initramfs modules_install
 	(cd initramfs && find . -depth -type f) | cpio --verbose --format=newc --create --owner=+0:+0\
 		--device-independent --directory=initramfs --file=$(INITRAMFS_FILE)
 
