@@ -36,7 +36,7 @@ build: initramfs
 build-server-linux:
 	$(MAKE) -C sl-src
 	mkdir -p build/runtime
-	cp --recursive sl-src/server-linux build/runtime/server-linux
+	cp --recursive sl-src/server-linux build/initramfs/runtime/server-linux
 
 #Build the kernel without initramfs in order to generate modules.builtin
 .PHONY: build-kernel-initial
