@@ -1,5 +1,5 @@
 #Automatically passed to sub-makes
-MAKEFLAGS += --jobs=4 --no-builtin-rules #--silent
+MAKEFLAGS += --no-builtin-rules #--silent
 KERNEL_CONFIG_FILE=boot.conf
 INITRAMFS_FILE=build/initramfs.cpio
 LINUX_SRC_URL=https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.14.tar.xz 
@@ -30,23 +30,25 @@ run:
 .PHONY: build
 build: initramfs
 	$(call copy-config,records,bzImage-build)
-	$(MAKE) -C $(LINUX_SRC_DIR) CONFIG_BLK_DEV_INITRD=n bzImage
+	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage
 	echo "bzImage is located at" $(KERNEL_BINARY_FILE) 
 
 build-server-linux:
 	$(MAKE) -C sl-src
-	mkdir -p build/runtime
 	cp --recursive sl-src/server-linux build/initramfs/runtime/server-linux
 
 #Build the kernel without initramfs in order to generate modules.builtin
 .PHONY: build-kernel-initial
 build-kernel-initial:
-	$(MAKE) -C $(LINUX_SRC_DIR) CONFIG_BLK_DEV_INITRD=n bzImage
+	$(LINUX_SRC_DIR)/scripts/config --set-val CONFIG_BOOT_CONFIG n
+	$(LINUX_SRC_DIR)/scripts/config --set-val CONFIG_BLK_DEV_INITRD n
+	#TODO stuff with certs/signing_key.pem that this command will generate
+	$(MAKE) -C $(LINUX_SRC_DIR) bzImage
 
 #Build the modules without installing them in the initramfs
 .PHONY: build-modules-initial
 build-modules-initial:
-	$(MAKE) -C $(LINUX_SRC_DIR) modules
+	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 modules
 
 #Install modules in the initramfs directory and build the cpio archive
 .PHONY: initramfs
@@ -79,6 +81,16 @@ download: dirs
 .PHONY: backup-config
 backup-config: dirs
 	$(call copy-config,records,backup)
+	
+.PHONY: get-config
+get-config:
+	cp $(LINUX_SRC_DIR)/.config kernel.config
+	
+.PHONY: use-backup-config
+use-backup-config:
+	$(call copy-config,records,pre-use-backup) || true
+	cp kernel.config $(LINUX_SRC_DIR)/.config
+	#$(MAKE) -C $(LINUX_SRC_DIR) oldconfig
 
 .PHONY: clean
 full-clean:
@@ -87,4 +99,7 @@ full-clean:
 	
 .PHONY: dirs
 dirs:
-	mkdir --parents build/initramfs records
+	mkdir --parents build/initramfs/runtime records
+	
+.DEFAULT:
+	echo "Unsupported target"
