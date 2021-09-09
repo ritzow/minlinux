@@ -43,7 +43,6 @@ build-init:
 build-kernel-initial:
 	$(LINUX_SRC_DIR)/scripts/config --set-val CONFIG_BOOT_CONFIG n
 	$(LINUX_SRC_DIR)/scripts/config --set-val CONFIG_BLK_DEV_INITRD n
-	#TODO stuff with certs/signing_key.pem that this command will generate
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 vmlinux
 
 #Build the modules without installing them in the initramfs
@@ -54,7 +53,7 @@ build-modules-initial:
 .PHONY: gen-key
 gen-key:
 	openssl req -new -utf8 -sha256 -days 36500 -batch -x509 \
-		-config kernel_keygen.conf -outform PEM -out kernel_key.pem
+		-config kernel_keygen.conf -outform PEM -keyout build/kernel_key.pem -out build/kernel_key.pem
 
 #Install modules in the initramfs directory and build the cpio archive
 .PHONY: initramfs
