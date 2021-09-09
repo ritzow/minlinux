@@ -5,6 +5,7 @@ INITRAMFS_FILE=build/initramfs.cpio
 LINUX_SRC_URL=https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.14.tar.xz 
 LINUX_SRC_DIR=build/linux-5.14
 KERNEL_BINARY_FILE=$(LINUX_SRC_DIR)/$(shell $(MAKE) --silent -C $(LINUX_SRC_DIR) image_name)
+CONFIG_SET=$(LINUX_SRC_DIR)/scripts/config --file $(LINUX_SRC_DIR)/.config
 
 copy-config = cp $(LINUX_SRC_DIR)/.config $(1)/$(2)-$(shell date --iso-8601=seconds).config
 
@@ -12,6 +13,14 @@ copy-config = cp $(LINUX_SRC_DIR)/.config $(1)/$(2)-$(shell date --iso-8601=seco
 help:
 	echo "build: Build the kernel and modules using .config in" $(LINUX_SRC_DIR)
 	echo "download: Download the linux sources into directory" $(LINUX_SRC_DIR)
+
+.PHONY: kernel-help
+kernel-help:
+	$(MAKE) -C $(LINUX_SRC_DIR) help | less
+	
+.PHONY: inspect-kernel
+inspect-kernel:
+	file --brief $(KERNEL_BINARY_FILE)
 
 .PHONY: kbuild-docs
 kbuild-docs:
@@ -24,38 +33,43 @@ configure-kernel:
 
 .PHONY: run
 run: 
-	qemu-system-x86_64 -nographic -enable-kvm -kernel $(KERNEL_BINARY_FILE) -append "rootfstype=initramfs console=ttyS0"
-
-#Build the kernel, includes the cpio initramfs in bzImage
-.PHONY: build
-build:
-	$(MAKE) use-saved-config
-	$(call copy-config,records,bzImage-build)
-	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage
-	echo "bzImage is located at" $(KERNEL_BINARY_FILE) 
+	qemu-system-x86_64 -nographic -enable-kvm -kernel $(KERNEL_BINARY_FILE) -append "console=ttyS0"
 
 .PHONY: build-all
 build-all:
 	$(MAKE) dirs
 	$(MAKE) use-saved-config
-	$(MAKE) build-modules-initial
 	$(MAKE) gen-key
-	$(MAKE) build-init
+	$(MAKE) build-modules-initial
 	$(MAKE) build-kernel-initial
+	$(MAKE) build-init
 	$(MAKE) initramfs
-	#TODO need to restore use-saved-config so it doesn't ask questions here
+	$(MAKE) kernel-clean
+	$(MAKE) use-saved-config
 	$(MAKE) build
 
+.PHONY: build
+build:
+	$(call copy-config,records,bzImage-build)
+	$(CONFIG_SET) --set-str CONFIG_INITRAMFS_SOURCE "$(shell realpath build/initramfs)"
+	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage
+	echo "bzImage is located at" $(KERNEL_BINARY_FILE)
+
+.PHONY: mk-test
+mk-test:
+	$(CONFIG_SET) --set-str CONFIG_INITRAMFS_SOURCE "$(shell realpath build/initramfs)"
+	#echo "$(shell realpath build/initramfs)"
+	
 .PHONY: build-init
 build-init:
 	$(MAKE) -C sl-src
-	cp --recursive sl-src/server-linux build/initramfs/runtime/server-linux
+	cp --recursive sl-src/init build/initramfs/runtime/init
 
 #Build the kernel without initramfs in order to generate modules.builtin
 .PHONY: build-kernel-initial
 build-kernel-initial:
-	$(LINUX_SRC_DIR)/scripts/config --file $(LINUX_SRC_DIR)/.config --disable CONFIG_BOOT_CONFIG
-	$(LINUX_SRC_DIR)/scripts/config --file $(LINUX_SRC_DIR)/.config --disable CONFIG_BLK_DEV_INITRD
+	$(CONFIG_SET) --disable CONFIG_BOOT_CONFIG
+	$(CONFIG_SET) --disable CONFIG_BLK_DEV_INITRD
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 vmlinux
 
 #Build the modules without installing them in the initramfs
@@ -73,8 +87,8 @@ gen-key:
 initramfs: 
 	#Call beforehand: build-kernel-initial build-modules-initial build-server-linux
 	$(MAKE) -C $(LINUX_SRC_DIR) INSTALL_MOD_PATH=../initramfs modules_install #INSTALL_MOD_STRIP=1 
-	(cd build/initramfs && find -depth -type f,d) | cpio --verbose --format=newc --create --owner=+0:+0\
-		--device-independent --directory=build/initramfs --file=$(INITRAMFS_FILE)
+	#(cd build/initramfs && find -depth -type f,d) | cpio --verbose --format=newc --create --owner=+0:+0\
+	#	--device-independent --directory=build/initramfs --file=$(INITRAMFS_FILE)
 	#Bootconfig won't compile, missing symbol "ret"
 	#$(MAKE) -C $(LINUX_SRC_DIR)/tools/bootconfig
 	#Add boot config (alternative to kernal command line args)
@@ -89,7 +103,8 @@ list-initramfs:
 .PHONY: compute_modules_size 
 compute_modules_size:
 	#TODO use initramfs directory after module install instead
-	find $(LINUX_SRC_DIR) -name "*.ko" | tr '\n' '\0' | du --summarize --apparent-size --human-readable --total --files0-from=-
+	find $(LINUX_SRC_DIR) -name "*.ko" | tr '\n' '\0' | du --summarize \
+		--apparent-size --human-readable --total --files0-from=-
 	
 #Download the kernel source code
 .PHONY: download
@@ -108,6 +123,10 @@ save-new-config:
 get-config:
 	cp $(LINUX_SRC_DIR)/.config kernel.config
 	
+.PHONY: diff-config
+diff-config:
+	diff --color --speed-large-files -s kernel.config $(LINUX_SRC_DIR)/.config
+	
 .PHONY: use-saved-config
 use-saved-config:
 	$(call copy-config,records,pre-use-backup) || true
@@ -119,6 +138,10 @@ clean:
 	$(call copy-config,records,pre-clean)
 	$(MAKE) -C $(LINUX_SRC_DIR) clean
 	rm -r build/initramfs build/kernel_key.pem
+	
+.PHONY: kernel-clean
+kernel-clean:
+	$(MAKE) -C $(LINUX_SRC_DIR) clean
 	
 .PHONY: dirs
 dirs:
