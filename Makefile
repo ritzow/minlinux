@@ -29,6 +29,8 @@ run:
 #Build the kernel, includes the cpio initramfs in bzImage
 .PHONY: build
 build:
+	$(LINUX_SRC_DIR)/scripts/config --file $(LINUX_SRC_DIR)/.config --enable CONFIG_BOOT_CONFIG
+	$(LINUX_SRC_DIR)/scripts/config --file $(LINUX_SRC_DIR)/.config --enable CONFIG_BLK_DEV_INITRD
 	$(call copy-config,records,bzImage-build)
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage
 	echo "bzImage is located at" $(KERNEL_BINARY_FILE) 
@@ -41,8 +43,8 @@ build-init:
 #Build the kernel without initramfs in order to generate modules.builtin
 .PHONY: build-kernel-initial
 build-kernel-initial:
-	$(LINUX_SRC_DIR)/scripts/config --set-val CONFIG_BOOT_CONFIG n
-	$(LINUX_SRC_DIR)/scripts/config --set-val CONFIG_BLK_DEV_INITRD n
+	$(LINUX_SRC_DIR)/scripts/config --file $(LINUX_SRC_DIR)/.config --disable CONFIG_BOOT_CONFIG
+	$(LINUX_SRC_DIR)/scripts/config --file $(LINUX_SRC_DIR)/.config --disable CONFIG_BLK_DEV_INITRD
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 vmlinux
 
 #Build the modules without installing them in the initramfs
