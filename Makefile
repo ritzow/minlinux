@@ -24,16 +24,27 @@ configure-kernel:
 
 .PHONY: run
 run: 
-	qemu-system-x86_64 -enable-kvm -kernel $(KERNEL_BINARY_FILE)
+	qemu-system-x86_64 -nographic -enable-kvm -kernel $(KERNEL_BINARY_FILE) -append "rootfstype=initramfs console=ttyS0"
 
 #Build the kernel, includes the cpio initramfs in bzImage
 .PHONY: build
 build:
-	$(LINUX_SRC_DIR)/scripts/config --file $(LINUX_SRC_DIR)/.config --enable CONFIG_BOOT_CONFIG
-	$(LINUX_SRC_DIR)/scripts/config --file $(LINUX_SRC_DIR)/.config --enable CONFIG_BLK_DEV_INITRD
+	$(MAKE) use-saved-config
 	$(call copy-config,records,bzImage-build)
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage
 	echo "bzImage is located at" $(KERNEL_BINARY_FILE) 
+
+.PHONY: build-all
+build-all:
+	$(MAKE) dirs
+	$(MAKE) use-saved-config
+	$(MAKE) build-modules-initial
+	$(MAKE) gen-key
+	$(MAKE) build-init
+	$(MAKE) build-kernel-initial
+	$(MAKE) initramfs
+	#TODO need to restore use-saved-config so it doesn't ask questions here
+	$(MAKE) build
 
 .PHONY: build-init
 build-init:
@@ -97,8 +108,8 @@ save-new-config:
 get-config:
 	cp $(LINUX_SRC_DIR)/.config kernel.config
 	
-.PHONY: use-backup-config
-use-backup-config:
+.PHONY: use-saved-config
+use-saved-config:
 	$(call copy-config,records,pre-use-backup) || true
 	cp kernel.config $(LINUX_SRC_DIR)/.config
 	#$(MAKE) -C $(LINUX_SRC_DIR) oldconfig
@@ -106,8 +117,8 @@ use-backup-config:
 .PHONY: clean
 clean:
 	$(call copy-config,records,pre-clean)
-	rm -r build/initramfs
 	$(MAKE) -C $(LINUX_SRC_DIR) clean
+	rm -r build/initramfs build/kernel_key.pem
 	
 .PHONY: dirs
 dirs:
