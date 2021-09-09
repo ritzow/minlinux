@@ -28,12 +28,13 @@ run:
 
 #Build the kernel, includes the cpio initramfs in bzImage
 .PHONY: build
-build: initramfs
+build:
 	$(call copy-config,records,bzImage-build)
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage
 	echo "bzImage is located at" $(KERNEL_BINARY_FILE) 
 
-build-server-linux:
+.PHONY: build-init
+build-init:
 	$(MAKE) -C sl-src
 	cp --recursive sl-src/server-linux build/initramfs/runtime/server-linux
 
@@ -43,17 +44,23 @@ build-kernel-initial:
 	$(LINUX_SRC_DIR)/scripts/config --set-val CONFIG_BOOT_CONFIG n
 	$(LINUX_SRC_DIR)/scripts/config --set-val CONFIG_BLK_DEV_INITRD n
 	#TODO stuff with certs/signing_key.pem that this command will generate
-	$(MAKE) -C $(LINUX_SRC_DIR) bzImage
+	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 vmlinux
 
 #Build the modules without installing them in the initramfs
 .PHONY: build-modules-initial
 build-modules-initial:
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 modules
 
+.PHONY: gen-key
+gen-key:
+	openssl req -new -utf8 -sha256 -days 36500 -batch -x509 \
+		-config kernel_keygen.conf -outform PEM -out kernel_key.pem
+
 #Install modules in the initramfs directory and build the cpio archive
 .PHONY: initramfs
-initramfs: build-kernel-initial build-modules-initial build-server-linux
-	$(MAKE) -C $(LINUX_SRC_DIR) INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH=../initramfs modules_install
+initramfs: 
+	#Call beforehand: build-kernel-initial build-modules-initial build-server-linux
+	$(MAKE) -C $(LINUX_SRC_DIR) INSTALL_MOD_PATH=../initramfs modules_install #INSTALL_MOD_STRIP=1 
 	(cd build/initramfs && find -depth -type f,d) | cpio --verbose --format=newc --create --owner=+0:+0\
 		--device-independent --directory=build/initramfs --file=$(INITRAMFS_FILE)
 	#Bootconfig won't compile, missing symbol "ret"
@@ -82,6 +89,9 @@ download: dirs
 backup-config: dirs
 	$(call copy-config,records,backup)
 	
+save-new-config:
+	cp $(LINUX_SRC_DIR)/.config kernel.config
+	
 .PHONY: get-config
 get-config:
 	cp $(LINUX_SRC_DIR)/.config kernel.config
@@ -93,9 +103,10 @@ use-backup-config:
 	#$(MAKE) -C $(LINUX_SRC_DIR) oldconfig
 
 .PHONY: clean
-full-clean:
+clean:
 	$(call copy-config,records,pre-clean)
-	rm -r build
+	rm -r build/initramfs
+	$(MAKE) -C $(LINUX_SRC_DIR) clean
 	
 .PHONY: dirs
 dirs:
