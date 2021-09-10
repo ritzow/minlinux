@@ -1,5 +1,5 @@
 #Automatically passed to sub-makes
-MAKEFLAGS += --no-builtin-rules #--silent
+MAKEFLAGS += --no-print-directory --no-builtin-rules
 KERNEL_CONFIG_FILE=boot.conf
 INITRAMFS_FILE=build/initramfs.cpio
 LINUX_SRC_URL=https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.14.tar.xz 
@@ -42,7 +42,7 @@ configure-kernel:
 .PHONY: run
 run: 
 	qemu-system-x86_64 -nographic -enable-kvm -kernel $(KERNEL_BINARY_FILE) \
-		-append "init=/runtime/init root=/dev/ram0 rw rootfstype=tmpfs console=ttyS0"
+		-append "console=ttyS0"
 
 .PHONY: build-all
 build-all:
