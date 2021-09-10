@@ -1,9 +1,8 @@
 #Automatically passed to sub-makes
 MAKEFLAGS += --no-print-directory --no-builtin-rules
 KERNEL_CONFIG_FILE=boot.conf
-INITRAMFS_FILE=build/initramfs.cpio
-LINUX_SRC_URL=https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.14.tar.xz 
-LINUX_SRC_DIR=build/linux-5.14
+LINUX_SRC_URL=https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.14.2.tar.xz
+LINUX_SRC_DIR=build/linux-5.14.2
 KERNEL_BINARY_FILE=$(LINUX_SRC_DIR)/$(shell $(MAKE) --silent -C $(LINUX_SRC_DIR) image_name)
 CONFIG_SET=$(LINUX_SRC_DIR)/scripts/config --file $(LINUX_SRC_DIR)/.config
 
@@ -42,18 +41,18 @@ configure-kernel:
 .PHONY: run
 run: 
 	qemu-system-x86_64 -nographic -enable-kvm -kernel $(KERNEL_BINARY_FILE) \
-		-append "console=ttyS0"
+		-append "console=ttyS0" -boot menu=on
 
 .PHONY: build-all
 build-all:
 	$(MAKE) dirs
+	$(MAKE) download
 	$(MAKE) use-saved-config
 	$(MAKE) gen-key
 	$(MAKE) build-modules-initial
 	$(MAKE) build-kernel-initial
-	$(MAKE) build-init
+	$(MAKE) -C sl-src init
 	$(MAKE) initramfs
-	$(MAKE) kernel-clean
 	$(MAKE) use-saved-config
 	$(MAKE) build
 
@@ -63,16 +62,6 @@ build:
 	$(CONFIG_SET) --set-str CONFIG_INITRAMFS_SOURCE "$(shell realpath initramfs.conf)"
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage
 	echo "bzImage is located at" $(KERNEL_BINARY_FILE)
-
-.PHONY: mk-test
-mk-test:
-	$(CONFIG_SET) --set-str CONFIG_INITRAMFS_SOURCE "$(shell realpath build/initramfs)"
-	#echo "$(shell realpath build/initramfs)"
-	
-.PHONY: build-init
-build-init:
-	$(MAKE) -C sl-src
-	cp --recursive sl-src/init build/initramfs/runtime/init
 
 #Build the kernel without initramfs in order to generate modules.builtin
 .PHONY: build-kernel-initial
@@ -94,10 +83,7 @@ gen-key:
 #Install modules in the initramfs directory and build the cpio archive
 .PHONY: initramfs
 initramfs: 
-	#Call beforehand: build-kernel-initial build-modules-initial build-server-linux
 	$(MAKE) -C $(LINUX_SRC_DIR) INSTALL_MOD_PATH=../initramfs modules_install #INSTALL_MOD_STRIP=1 
-	#(cd build/initramfs && find -depth -type f,d) | cpio --verbose --format=newc --create --owner=+0:+0\
-	#	--device-independent --directory=build/initramfs --file=$(INITRAMFS_FILE)
 	#Bootconfig won't compile, missing symbol "ret"
 	#$(MAKE) -C $(LINUX_SRC_DIR)/tools/bootconfig
 	#Add boot config (alternative to kernal command line args)
@@ -107,13 +93,6 @@ initramfs:
 .PHONY: list-initramfs
 list-initramfs:
 	cat $(LINUX_SRC_DIR)/usr/initramfs_data.cpio | cpio --list
-
-#Estimate the size of all kernel modules
-.PHONY: compute_modules_size 
-compute_modules_size:
-	#TODO use initramfs directory after module install instead
-	find $(LINUX_SRC_DIR) -name "*.ko" | tr '\n' '\0' | du --summarize \
-		--apparent-size --human-readable --total --files0-from=-
 	
 #Download the kernel source code
 .PHONY: download
@@ -126,10 +105,6 @@ backup-config: dirs
 	$(call copy-config,records,backup)
 	
 save-new-config:
-	cp $(LINUX_SRC_DIR)/.config kernel.config
-	
-.PHONY: get-config
-get-config:
 	cp $(LINUX_SRC_DIR)/.config kernel.config
 	
 .PHONY: diff-config
@@ -146,7 +121,7 @@ use-saved-config:
 clean:
 	$(call copy-config,records,pre-clean)
 	$(MAKE) -C $(LINUX_SRC_DIR) clean
-	rm -r build/initramfs build/kernel_key.pem
+	rm -r build/initramfs build/kernel_key.pem $(LINUX_SRC_DIR)
 	
 .PHONY: kernel-clean
 kernel-clean:
@@ -154,7 +129,7 @@ kernel-clean:
 	
 .PHONY: dirs
 dirs:
-	mkdir --parents build/initramfs/runtime records
+	mkdir --parents build/initramfs records
 	
 .DEFAULT:
 	echo "Unsupported target"
