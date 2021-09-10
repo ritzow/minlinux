@@ -41,7 +41,7 @@ configure-kernel:
 .PHONY: run
 run: 
 	qemu-system-x86_64 -nographic -enable-kvm -kernel $(KERNEL_BINARY_FILE) \
-		-append "console=ttyS0" -boot menu=on
+		-append "console=ttyS0"
 
 .PHONY: build-all
 build-all:
