@@ -14,9 +14,17 @@ help:
 	echo "build: Build the kernel and modules using .config in" $(LINUX_SRC_DIR)
 	echo "download: Download the linux sources into directory" $(LINUX_SRC_DIR)
 
-.PHONY: kernel-help
+.PHONY: help-kernel
 kernel-help:
 	$(MAKE) -C $(LINUX_SRC_DIR) help | less
+	
+.PHONY: help-devices
+help-devices:
+	cat $(LINUX_SRC_DIR)/Documentation/admin-guide/devices.txt | less
+	
+.PHONY: help-initramfs
+help-initramfs:
+	build/linux-5.14/usr/gen_init_cpio
 	
 .PHONY: inspect-kernel
 inspect-kernel:
@@ -33,7 +41,8 @@ configure-kernel:
 
 .PHONY: run
 run: 
-	qemu-system-x86_64 -nographic -enable-kvm -kernel $(KERNEL_BINARY_FILE) -append "console=ttyS0"
+	qemu-system-x86_64 -nographic -enable-kvm -kernel $(KERNEL_BINARY_FILE) \
+		-append "init=/runtime/init root=/dev/ram0 rw rootfstype=tmpfs console=ttyS0"
 
 .PHONY: build-all
 build-all:
@@ -51,7 +60,7 @@ build-all:
 .PHONY: build
 build:
 	$(call copy-config,records,bzImage-build)
-	$(CONFIG_SET) --set-str CONFIG_INITRAMFS_SOURCE "$(shell realpath build/initramfs)"
+	$(CONFIG_SET) --set-str CONFIG_INITRAMFS_SOURCE "$(shell realpath initramfs.conf)"
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage
 	echo "bzImage is located at" $(KERNEL_BINARY_FILE)
 
@@ -97,7 +106,7 @@ initramfs:
 #List files in current initramfs archive
 .PHONY: list-initramfs
 list-initramfs:
-	cat $(INITRAMFS_FILE) | cpio --list
+	cat $(LINUX_SRC_DIR)/usr/initramfs_data.cpio | cpio --list
 
 #Estimate the size of all kernel modules
 .PHONY: compute_modules_size 
