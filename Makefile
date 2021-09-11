@@ -10,8 +10,8 @@ copy-config = cp $(LINUX_SRC_DIR)/.config $(1)/$(2)-$(shell date --iso-8601=seco
 
 .PHONY: help
 help:
-	echo "build: Build the kernel and modules using .config in" $(LINUX_SRC_DIR)
-	echo "download: Download the linux sources into directory" $(LINUX_SRC_DIR)
+	@echo "build: Build the kernel and modules using .config in" $(LINUX_SRC_DIR)
+	@echo "download: Download the linux sources into directory" $(LINUX_SRC_DIR)
 
 .PHONY: help-kernel
 help-kernel:
@@ -19,7 +19,7 @@ help-kernel:
 	
 .PHONY: help-devices
 help-devices:
-	cat $(LINUX_SRC_DIR)/Documentation/admin-guide/devices.txt | less
+	@cat $(LINUX_SRC_DIR)/Documentation/admin-guide/devices.txt | less
 	
 .PHONY: help-initramfs
 help-initramfs:
@@ -33,7 +33,7 @@ inspect-kernel:
 
 .PHONY: kbuild-docs
 kbuild-docs:
-	vim -M $(LINUX_SRC_DIR)/Documentation/kbuild/kbuild.rst
+	less $(LINUX_SRC_DIR)/Documentation/kbuild/kbuild.rst
 
 .PHONY: configure-kernel
 configure-kernel:
@@ -42,8 +42,7 @@ configure-kernel:
 
 .PHONY: run
 run: 
-	qemu-system-x86_64 -nographic -kernel $(KERNEL_BINARY_FILE) \
-		-append "console=ttyS0"
+	qemu-system-x86_64 -nographic -kernel $(KERNEL_BINARY_FILE) -append "console=ttyS0"
 
 .PHONY: build-all
 build-all:
@@ -69,16 +68,17 @@ install-kernel-headers:
 	$(MAKE) -C $(LINUX_SRC_DIR) INSTALL_HDR_PATH=.. headers_install
 	cp -r $(LINUX_SRC_DIR)/tools/include/nolibc build/include
 
-LINUX_INCLUDES = "$(shell realpath build/include)"
-export LINUX_INCLUDES
-
 .PHONY: build-init
 build-init:
-	$(MAKE) -C sl-src init
+	$(MAKE) -C sl-src LINUX_INCLUDES="$(shell realpath build/include)" init
 
 .PHONY: apt-install-reqs
-apt-install-reqs:
-	sudo apt-get install dash flex bison libssl-dev libelf-dev bc zstd
+apt-install-kernel-reqs:
+	apt-get install dash flex bison libssl-dev libelf-dev bc zstd
+
+.PHONY: apt-install-proj-reqs
+apt-install-proj-reqs:
+	apt-get install curl openssl
 
 #Build the kernel without initramfs in order to generate modules.builtin
 .PHONY: build-kernel-initial
@@ -106,7 +106,7 @@ gen-key:
 #List files in current initramfs archive
 .PHONY: list-initramfs
 list-initramfs:
-	cat $(LINUX_SRC_DIR)/usr/initramfs_data.cpio | cpio --list
+	@cat $(LINUX_SRC_DIR)/usr/initramfs_data.cpio | cpio --list
 	
 #Download the kernel source code
 .PHONY: download
@@ -121,6 +121,7 @@ backup-config: dirs
 save-new-config:
 	cp $(LINUX_SRC_DIR)/.config kernel.config
 	
+#Diff the current git tracked kernel.config with the one used by linux build targets
 .PHONY: diff-config
 diff-config:
 	diff --color --speed-large-files -s kernel.config $(LINUX_SRC_DIR)/.config
@@ -129,7 +130,6 @@ diff-config:
 use-saved-config:
 	$(call copy-config,records,pre-use-backup) || true
 	cp kernel.config $(LINUX_SRC_DIR)/.config
-	#$(MAKE) -C $(LINUX_SRC_DIR) oldconfig
 
 .PHONY: clean
 clean:
@@ -146,4 +146,4 @@ dirs:
 	mkdir --parents build/initramfs records
 	
 .DEFAULT:
-	echo "Unsupported target"
+	@echo "Unsupported target"
