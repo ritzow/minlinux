@@ -1,19 +1,12 @@
-//#include <unistd.h>
-//#include <sys/types.h>
-//#include <sys/stat.h>
-//#include <fcntl.h>
+#include <nolibc/nolibc.h>
 
-#include "syscall.h"
-
-void _start() {
-	//int in = open("/dev/console", O_APPEND);
-	
-	//int fd = open("/dev/console", O_APPEND, 
+int main(int argc, char * argv[], char * envp[]) {
+	int con = sys_open("/dev/console", O_APPEND | O_WRONLY, 0);
 
 	while(1) {
 		/* Busy wait */
-		pid_t pid = getpid();
-		//write(in, "hello\n", sizeof "hello\n");
-		//sleep(1);
+		//pid_t pid = sys_getpid();
+		sys_write(1, "hello linux!\n", sizeof "hello linux!\n");
+		sleep(1);
 	}
 }

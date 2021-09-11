@@ -1,5 +1,5 @@
 #Automatically passed to sub-makes
-MAKEFLAGS += --no-print-directory --no-builtin-rules
+MAKEFLAGS += --no-print-directory --no-builtin-rules --no-builtin-variables
 KERNEL_CONFIG_FILE=boot.conf
 LINUX_SRC_URL=https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.14.2.tar.xz
 LINUX_SRC_DIR=build/linux-5.14.2
@@ -14,7 +14,7 @@ help:
 	echo "download: Download the linux sources into directory" $(LINUX_SRC_DIR)
 
 .PHONY: help-kernel
-kernel-help:
+help-kernel:
 	$(MAKE) -C $(LINUX_SRC_DIR) help | less
 	
 .PHONY: help-devices
@@ -27,7 +27,9 @@ help-initramfs:
 	
 .PHONY: inspect-kernel
 inspect-kernel:
-	file --brief $(KERNEL_BINARY_FILE)
+	@file --brief $(KERNEL_BINARY_FILE)
+	@stat --printf="%s" $(KERNEL_BINARY_FILE) 
+	@echo " bytes"
 
 .PHONY: kbuild-docs
 kbuild-docs:
@@ -40,7 +42,7 @@ configure-kernel:
 
 .PHONY: run
 run: 
-	qemu-system-x86_64 -nographic -enable-kvm -kernel $(KERNEL_BINARY_FILE) \
+	qemu-system-x86_64 -nographic -kernel $(KERNEL_BINARY_FILE) \
 		-append "console=ttyS0"
 
 .PHONY: build-all
@@ -49,19 +51,34 @@ build-all:
 	$(MAKE) download
 	$(MAKE) use-saved-config
 	$(MAKE) gen-key
-	$(MAKE) build-modules-initial
 	$(MAKE) build-kernel-initial
-	$(MAKE) -C sl-src init
-	$(MAKE) initramfs
+	$(MAKE) build-modules
 	$(MAKE) use-saved-config
 	$(MAKE) build
 
 .PHONY: build
 build:
+	$(MAKE) build-init
 	$(call copy-config,records,bzImage-build)
 	$(CONFIG_SET) --set-str CONFIG_INITRAMFS_SOURCE "$(shell realpath initramfs.conf)"
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage
 	echo "bzImage is located at" $(KERNEL_BINARY_FILE)
+
+.PHONY: install-kernel-headers
+install-kernel-headers:
+	$(MAKE) -C $(LINUX_SRC_DIR) INSTALL_HDR_PATH=.. headers_install
+	cp -r $(LINUX_SRC_DIR)/tools/include/nolibc build/include
+
+LINUX_INCLUDES = "$(shell realpath build/include)"
+export LINUX_INCLUDES
+
+.PHONY: build-init
+build-init:
+	$(MAKE) -C sl-src init
+
+.PHONY: apt-install-reqs
+apt-install-reqs:
+	sudo apt-get install dash flex bison libssl-dev libelf-dev bc zstd
 
 #Build the kernel without initramfs in order to generate modules.builtin
 .PHONY: build-kernel-initial
@@ -71,23 +88,20 @@ build-kernel-initial:
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 vmlinux
 
 #Build the modules without installing them in the initramfs
-.PHONY: build-modules-initial
+.PHONY: build-modules
 build-modules-initial:
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 modules
+	$(MAKE) -C $(LINUX_SRC_DIR) INSTALL_MOD_PATH=../initramfs modules_install #INSTALL_MOD_STRIP=1 
+	#TODO generate initramfs.conf with all modules and modprobe included
+	@#Bootconfig won't compile, missing symbol "ret"
+	@#$(MAKE) -C $(LINUX_SRC_DIR)/tools/bootconfig
+	@#Add boot config (alternative to kernal command line args)
+	@#tools/bootconfig/bootconfig -a $(KERNEL_CONFIG_FILE) $(INITRAMFS_FILE)
 
 .PHONY: gen-key
 gen-key:
 	openssl req -new -utf8 -sha256 -days 36500 -batch -x509 \
 		-config kernel_keygen.conf -outform PEM -keyout build/kernel_key.pem -out build/kernel_key.pem
-
-#Install modules in the initramfs directory and build the cpio archive
-.PHONY: initramfs
-initramfs: 
-	$(MAKE) -C $(LINUX_SRC_DIR) INSTALL_MOD_PATH=../initramfs modules_install #INSTALL_MOD_STRIP=1 
-	#Bootconfig won't compile, missing symbol "ret"
-	#$(MAKE) -C $(LINUX_SRC_DIR)/tools/bootconfig
-	#Add boot config (alternative to kernal command line args)
-	#tools/bootconfig/bootconfig -a $(KERNEL_CONFIG_FILE) $(INITRAMFS_FILE)
 
 #List files in current initramfs archive
 .PHONY: list-initramfs
