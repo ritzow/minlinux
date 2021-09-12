@@ -23,7 +23,11 @@ help-devices:
 	
 .PHONY: help-initramfs
 help-initramfs:
-	build/linux-5.14/usr/gen_init_cpio
+	$(LINUX_SRC_DIR)/usr/gen_init_cpio
+
+.PHONY: help-syscalls
+help-syscalls:
+	less $(LINUX_SRC_DIR)/arch/x86/entry/syscalls/syscall_64.tbl build/include/asm/unistd_64.h
 	
 .PHONY: inspect-kernel
 inspect-kernel:
@@ -42,7 +46,7 @@ configure-kernel:
 
 .PHONY: run
 run: 
-	qemu-system-x86_64 -nographic -kernel $(KERNEL_BINARY_FILE) -append "console=ttyS0"
+	qemu-system-x86_64 -nographic -sandbox on -kernel $(KERNEL_BINARY_FILE) -append "console=ttyS0"
 
 .PHONY: build-all
 build-all:
@@ -59,9 +63,23 @@ build-all:
 build:
 	$(MAKE) build-init
 	$(call copy-config,records,bzImage-build)
-	$(CONFIG_SET) --set-str CONFIG_INITRAMFS_SOURCE "$(shell realpath initramfs.conf)"
+	#$(CONFIG_SET) --set-str CONFIG_INITRAMFS_SOURCE "$(shell realpath initramfs.conf)"
+	#cp initramfs.conf build/initramfs.conf
+	(cat initramfs.conf; $(MAKE) _gen-cpio-list) > build/initramfs.conf 
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage
 	echo "bzImage is located at" $(KERNEL_BINARY_FILE)
+
+.PHONY: _gen-cpio-list
+.ONESHELL: 
+_gen-cpio-list:
+	@echo "\n"
+	@find build/initramfs/* | while read -r LINE; do
+		if test -d $$LINE; then
+			echo "dir" $${LINE#build/initramfs} 755 0 0
+		elif test -f $$LINE; then
+			echo "file" $${LINE#build/initramfs} $$(realpath $$LINE) 755 0 0
+		fi
+	done
 
 .PHONY: install-kernel-headers
 install-kernel-headers:
@@ -72,9 +90,9 @@ install-kernel-headers:
 build-init:
 	$(MAKE) -C sl-src LINUX_INCLUDES="$(shell realpath build/include)" init
 
-.PHONY: apt-install-reqs
+.PHONY: apt-install-kernel-reqs
 apt-install-kernel-reqs:
-	apt-get install dash flex bison libssl-dev libelf-dev bc zstd
+	apt-get install dash flex bison libssl-dev libelf-dev libncurses-dev bc zstd
 
 .PHONY: apt-install-proj-reqs
 apt-install-proj-reqs:
