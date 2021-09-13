@@ -1,19 +1,18 @@
-#include <nolibc/nolibc.h>
 
-typedef int boolean;
-
-#define true ((boolean)1)
-#define false ((boolean)0)
+#include "syscall.h"
 
 #define CHECK(expr) ({\
-	long res = (expr);\
+	int res = (expr);\
 	if(res < 0) {\
 		sys_exit(res);\
 	}\
 	res;\
 })
 
-boolean streq(const char *, const char *);
+
+/* TODDO mremap mprotect io_uring stuff */
+
+bool streq(const char *, const char *);
 
 int main(int argc, char * argv[], char * envp[]) {
 	int con = sys_open("/dev/console", O_APPEND | O_RDWR, 0);
@@ -47,7 +46,7 @@ int main(int argc, char * argv[], char * envp[]) {
 	}
 }
 
-boolean streq(const char * str1, const char * str2) {
+bool streq(const char * str1, const char * str2) {
 	do {
 		if(*str1 != *str2) {
 			return false;
