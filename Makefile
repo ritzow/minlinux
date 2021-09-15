@@ -46,7 +46,12 @@ configure-kernel:
 
 .PHONY: run
 run: 
-	qemu-system-x86_64 -nographic -sandbox on -kernel $(KERNEL_BINARY_FILE) -append "console=ttyS0"
+	qemu-system-x86_64 -nographic -sandbox on \
+	-kernel $(KERNEL_BINARY_FILE) -append "console=ttyS0"
+
+.PHONY: buildrun
+buildrun: build
+	$(MAKE) run
 
 .PHONY: build-all
 build-all:
@@ -60,11 +65,8 @@ build-all:
 	$(MAKE) build
 
 .PHONY: build
-build:
-	$(MAKE) build-init
+build: build-init
 	$(call copy-config,records,bzImage-build)
-	#$(CONFIG_SET) --set-str CONFIG_INITRAMFS_SOURCE "$(shell realpath initramfs.conf)"
-	#cp initramfs.conf build/initramfs.conf
 	(cat initramfs.conf; $(MAKE) _gen-cpio-list) > build/initramfs.conf 
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage
 	echo "bzImage is located at" $(KERNEL_BINARY_FILE)
@@ -142,7 +144,7 @@ save-new-config:
 #Diff the current git tracked kernel.config with the one used by linux build targets
 .PHONY: diff-config
 diff-config:
-	diff --color --speed-large-files -s kernel.config $(LINUX_SRC_DIR)/.config
+	@diff --color --speed-large-files -s kernel.config $(LINUX_SRC_DIR)/.config
 	
 .PHONY: use-saved-config
 use-saved-config:
