@@ -8,7 +8,8 @@ bool streq(const char *, const char *);
 /* TODDO mremap mprotect */
 
 /* startup code from nolibc.h */
-asm(".section .text\n"
+asm(
+    ".section .text\n"
     ".global _start\n"
     "_start:\n"
     "pop %rdi\n"                // argc   (first arg, %rdi)
@@ -21,8 +22,8 @@ asm(".section .text\n"
     "mov $60, %rax\n"           // NR_exit == 60
     "syscall\n"                 // really exit
     "hlt\n"                     // ensure it does not return
-    "");
-
+    ""
+);
 
 int main(int argc, char * argv[], char * envp[]) {
 	int con = sys_open("/dev/console", O_APPEND | O_RDWR, 0);
@@ -38,15 +39,16 @@ int main(int argc, char * argv[], char * envp[]) {
     */
     while (1) {
         /* Initiate read from stdin and wait for it to complete */
-        submit_to_sq(con, IORING_OP_READ, sizeof buffer, buffer, offset);
+        submit_to_sq(&uring, con, IORING_OP_READ, sizeof buffer, buffer, offset);
         /* Read completion queue entry */
-        int res = read_from_cq();
+        int res = read_from_cq(&uring);
         if (res > 0) {
             /* Read successful. Write to stdout. */
-            submit_to_sq(con, IORING_OP_WRITE, sizeof buffer, buffer, offset);
-            read_from_cq();
+            submit_to_sq(&uring, con, IORING_OP_WRITE, sizeof buffer, buffer, offset);
+            read_from_cq(&uring);
         } else if (res == 0) {
             /* reached EOF */
+            sys_write(con, "End of stdin\n", strlen("End of stdin\n"));
             break;
         } else if (res < 0) {
             /* Error reading file */

@@ -432,6 +432,12 @@ LOCAL const char *ltoa(long in)
 #define MARK() sys_write(0, __FILE__ ":" xstr(__LINE__) "\n", \
     __builtin_strlen(__FILE__ ":" xstr(__LINE__) "\n"))
 
+LOCAL void write_int(uint64_t val) {
+	const char * str = ltoa(val);
+	sys_write(0, str, strlen(str));
+	sys_write(0, "\n", strlen("\n"));
+}
+
 __attribute__((weak,unused))
 void *memcpy(void *dst, const void *src, size_t len)
 {
