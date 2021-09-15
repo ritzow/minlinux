@@ -1,87 +1,69 @@
 #include "syscall.h"
 #include "uring_ctl.h"
 
-#define QUEUE_DEPTH 1
-#define BLOCK_SZ    1024
-
-/* Example code from https://man.archlinux.org/man/io_uring.7 */
-
-int ring_fd;
-unsigned *sring_tail, *sring_mask, *sring_array, 
-            *cring_head, *cring_tail, *cring_mask;
+/* Example code from liburing https://man.archlinux.org/man/io_uring.7 */
 struct io_uring_sqe *sqes;
-struct io_uring_cqe *cqes;
-char buff[BLOCK_SZ];
-off_t offset;
 
-void setup_uring() {
+/* For teardown see 
+https://github.com/axboe/liburing/blob/10a0f65c617ed084281cd16c8b6e41cd6e307235/src/setup.c#L171 */
+
+uring_queue setup_uring() {
     struct io_uring_params p = {};
-    void *sq_ptr, *cq_ptr;
+    uring_queue uring;
     /* See io_uring_setup(2) for io_uring_params.flags you can set */
-    ring_fd = io_uring_setup(QUEUE_DEPTH, &p);
+    uring.ring_fd = io_uring_setup(1, &p);
 
-    if (ring_fd < 0) {
+    if (uring.ring_fd < 0) {
 		sys_exit(1);
     }
 
-    /*
-     * io_uring communication happens via 2 shared kernel-user space ring
-     * buffers, which can be jointly mapped with a single mmap() call in
-     * kernels >= 5.4.
-     */
-    int sring_sz = p.sq_off.array + p.sq_entries * sizeof(unsigned);
-    int cring_sz = p.cq_off.cqes + p.cq_entries * sizeof(struct io_uring_cqe);
-
-    /* Rather than check for kernel version, the recommended way is to
-     * check the features field of the io_uring_params structure, which is a 
-     * bitmask. If IORING_FEAT_SINGLE_MMAP is set, we can do away with the
-     * second mmap() call to map in the completion ring separately.
-     */
-    if (p.features & IORING_FEAT_SINGLE_MMAP) {
-        if (cring_sz > sring_sz)
-            sring_sz = cring_sz;
-        cring_sz = sring_sz;
-    }
-
-
-    /* Map in the submission and completion queue ring buffers.
-     *  Kernels < 5.4 only map in the submission queue, though.
-     */
-    sq_ptr = mmap(NULL, sring_sz, PROT_READ | PROT_WRITE,
-                  MAP_SHARED | MAP_POPULATE,
-                  ring_fd, IORING_OFF_SQ_RING);
-
-    if (sq_ptr < 0) {
+	if (!(p.features & IORING_FEAT_SINGLE_MMAP)) {
         sys_exit(1);
     }
-    if (p.features & IORING_FEAT_SINGLE_MMAP) {
-        cq_ptr = sq_ptr;
-    } else {
-        /* Map in the completion queue ring buffer in older kernels separately */
-        cq_ptr = mmap(NULL, cring_sz, PROT_READ | PROT_WRITE,
-            MAP_SHARED | MAP_POPULATE,
-            ring_fd, IORING_OFF_CQ_RING);
-        if (cq_ptr < 0) {
-            sys_exit(1);
-        }
+
+    int sring_sz = p.sq_off.array + p.sq_entries * sizeof(unsigned int);
+    int cring_sz = p.cq_off.cqes + p.cq_entries * sizeof(struct io_uring_cqe);
+
+	if(cring_sz > sring_sz) {
+		sring_sz = cring_sz;
+	}
+
+    uring.mmap_ring_size = sring_sz;
+    uring.mmap_ring = mmap(NULL, uring.mmap_ring_size,
+		PROT_READ | PROT_WRITE,
+    	MAP_SHARED | MAP_POPULATE,
+    	uring.ringfd, IORING_OFF_SQ_RING
+	);
+
+    if (uring.mmap_ring < 0) {
+        sys_exit(1);
     }
+	
     /* Save useful fields for later easy reference */
-    sring_tail = sq_ptr + p.sq_off.tail;
-    sring_mask = sq_ptr + p.sq_off.ring_mask;
-    sring_array = sq_ptr + p.sq_off.array;
+    uring.sq_tail = uring.mmap_ring + p.sq_off.tail;
+    uring.sq_mask =	uring.mmap_ring + p.sq_off.ring_mask;
+    uring.sq_array = uring.mmap_ring + p.sq_off.array;
+
+     /* Save useful fields for later easy reference */
+    uring.cq_head =	uring.mmap_ring + p.cq_off.head;
+    uring.cq_tail =	uring.mmap_ring + p.cq_off.tail;
+    uring.cq_mask =	uring.mmap_ring + p.cq_off.ring_mask;
+    uring.cqes = 	uring.mmap_ring + p.cq_off.cqes;
+
     /* Map in the submission queue entries array */
-    sqes = mmap(0, p.sq_entries * sizeof(struct io_uring_sqe),
-                   PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE,
-                   ring_fd, IORING_OFF_SQES);
-    if (sqes < 0) {
+    uring.mmap_sqes_size = p.sq_entries * sizeof(struct io_uring_sqe);
+    uring.mmap_sqes = mmap(NULL, 
+        uring.mmap_sqes_size,
+    	PROT_READ | PROT_WRITE, 
+		MAP_SHARED | MAP_POPULATE,
+    	ring_fd, IORING_OFF_SQES
+	);
+
+    if (uring.mmap_sqes < 0) {
 		sys_exit(1);
     }
-    /* Save useful fields for later easy reference */
-    cring_head = cq_ptr + p.cq_off.head;
-    cring_tail = cq_ptr + p.cq_off.tail;
-    cring_mask = cq_ptr + p.cq_off.ring_mask;
-    cqes = cq_ptr + p.cq_off.cqes;
-    return 0;
+
+	return uring;
 }
 
 /*
@@ -89,64 +71,70 @@ void setup_uring() {
 * In this function, we read completion events from the completion queue.
 * We dequeue the CQE, update and head and return the result of the operation.
 * */
-int read_from_cq() {
-    struct io_uring_cqe *cqe;
-    unsigned head, reaped = 0;
-    /* Read barrier */
+int read_from_cq(uring_queue* uring) {
 
-    __atomic_load(cring_head, &head, __ATOMIC_ACQUIRE);
+    /* Read barrier */
+    uint32_t head = __atomic_load_n(uring->cq_head, __ATOMIC_ACQUIRE);
+
     /*
     * Remember, this is a ring buffer. If head == tail, it means that the
     * buffer is empty.
     * */
-    if (head == *cring_tail)
+    if (head == *uring->cq_tail) {
         return -1;
+    }
+
     /* Get the entry */
-    cqe = &cqes[head & (*cring_mask)];
+    struct io_uring_cqe * cqe = &uring->cqes[head & *uring->cq_mask];
     if (cqe->res < 0) {
         sys_exit(1);
-    }    
+    }
     head++;
     /* Write barrier so that update to the head are made visible */
-    __atomic_store(cring_head, &head, __ATOMIC_RELEASE);
+    __atomic_store_n(uring->cq_head, head, __ATOMIC_RELEASE);
     return cqe->res;
 }
 
 /*
 * Submit a read or a write request to the submission queue.
 * */
-int submit_to_sq(int fd, int op) {
-    unsigned index, tail;
+void submit_to_sq(uring_queue * uring, int fd, int op, size_t bufsize, void * buffer, off_t offset) {
     /* Add our submission queue entry to the tail of the SQE ring buffer */
-    tail = *sring_tail;
-    index = tail & *sring_mask;
-    struct io_uring_sqe *sqe = &sqes[index];
+    uint32_t tail = *uring->sq_tail;
+    uint32_t index = tail & *uring->sq_mask;
+    struct io_uring_sqe *sqe = &(sqes)[index];
+
     /* Fill in the parameters required for the read or write operation */
     sqe->opcode = op;
     sqe->fd = fd;
-    sqe->addr = (unsigned long) buff;
-    if (op == IORING_OP_READ) {
-        memset(buff, 0, sizeof(buff));
-        sqe->len = BLOCK_SZ;
-    }
-    else {
-        sqe->len = strlen(buff);
-    }
+    sqe->addr = (uintptr_t)buffer;
+
+	switch(op) {
+		case IORING_OP_READ:
+			memset(buffer, 0, bufsize);
+        	sqe->len = bufsize;
+			break;
+		case IORING_OP_WRITE:
+			sqe->len = strlen(buffer);
+			break;
+		default:
+			sys_exit(1);
+			break;
+	}
+
     sqe->off = offset;
-    sring_array[index] = index;
+    uring->sq_array[index] = index;
     tail++;
     /* Update the tail */
-    __atomic_store(sring_tail, &tail, __ATOMIC_RELEASE);
+    __atomic_store_n(uring->sq_tail, tail, __ATOMIC_RELEASE);
     /*
     * Tell the kernel we have submitted events with the io_uring_enter() system
     * call. We also pass in the IOURING_ENTER_GETEVENTS flag which causes the
     * io_uring_enter() call to wait until min_complete (the 3rd param) events
     * complete.
     * */
-    int ret =  io_uring_enter(ring_fd, 1,1,
-                              IORING_ENTER_GETEVENTS);
+    int ret =  io_uring_enter(uring->ringfd, 1, 1, IORING_ENTER_GETEVENTS, NULL);
     if(ret < 0) {
         sys_exit(1);
     }
-    return ret;
 }

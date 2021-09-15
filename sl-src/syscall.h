@@ -67,6 +67,8 @@ typedef   signed long     blksize_t;
 typedef   signed long      blkcnt_t;
 typedef   signed long        time_t;
 
+#include <linux/signal.h>
+
 #define my_syscall0(num)                                                      \
 ({                                                                            \
 	long _ret;                                                            \
@@ -448,8 +450,13 @@ LOCAL int io_uring_setup(unsigned entries, struct io_uring_params *p) {
     return my_syscall2(__NR_io_uring_setup, entries, p);
 }
 
-LOCAL int io_uring_enter(int ring_fd, unsigned int to_submit,
-                   unsigned int min_complete, unsigned int flags) {
+LOCAL int io_uring_enter(int ring_fd, uint32_t to_submit,
+    uint32_t min_complete, uint32_t flags, sigset_t *sig) {
     return my_syscall6(__NR_io_uring_enter, ring_fd, to_submit, min_complete,
-                         flags, NULL, 0);
+                         flags, sig, 0);
+}
+
+LOCAL int io_uring_register(unsigned int fd, unsigned int opcode, void *arg, 
+	unsigned int nr_args) {
+	return my_syscall4(__NR_io_uring_register, fd, opcode, arg, nr_args);
 }

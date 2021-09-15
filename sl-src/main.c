@@ -5,11 +5,9 @@
 void rootinfo(int);
 bool streq(const char *, const char *);
 
-/* io_uring use gcc builtins __atomic_* for atomic operations */
+/* TODDO mremap mprotect */
 
-/* TODDO mremap mprotect io_uring stuff */
-
-/* startup code */
+/* startup code from nolibc.h */
 asm(".section .text\n"
     ".global _start\n"
     "_start:\n"
@@ -28,10 +26,11 @@ asm(".section .text\n"
 
 int main(int argc, char * argv[], char * envp[]) {
 	int con = sys_open("/dev/console", O_APPEND | O_RDWR, 0);
-
-	int res;
     /* Setup io_uring for use */
-    setup_uring();
+    uring_queue uring = setup_uring();
+
+	off_t offset = 0;
+	char buffer[1024];
 
     /* 
     * A while loop that reads from stdin and writes to stdout.
@@ -39,12 +38,12 @@ int main(int argc, char * argv[], char * envp[]) {
     */
     while (1) {
         /* Initiate read from stdin and wait for it to complete */
-        submit_to_sq(con, IORING_OP_READ);
+        submit_to_sq(con, IORING_OP_READ, sizeof buffer, buffer, offset);
         /* Read completion queue entry */
-        res = read_from_cq();
+        int res = read_from_cq();
         if (res > 0) {
             /* Read successful. Write to stdout. */
-            submit_to_sq(con, IORING_OP_WRITE);
+            submit_to_sq(con, IORING_OP_WRITE, sizeof buffer, buffer, offset);
             read_from_cq();
         } else if (res == 0) {
             /* reached EOF */
@@ -52,7 +51,6 @@ int main(int argc, char * argv[], char * envp[]) {
         } else if (res < 0) {
             /* Error reading file */
 			sys_exit(1);
-            break;
         }
         offset += res;
     }
