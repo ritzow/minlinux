@@ -1,5 +1,6 @@
 #include "syscall.h"
 #include "uring_ctl.h"
+#include "util.h"
 
 /* Example code from liburing https://man.archlinux.org/man/io_uring.7 */
 
@@ -15,26 +16,24 @@ uring_queue setup_uring() {
 	uring.ringfd = io_uring_setup(1, &p);
 
 	if (uring.ringfd < 0) {
-		sys_exit(1);
+		exit(1);
 	}
 
 	if (!(p.features & IORING_FEAT_SINGLE_MMAP)) {
-		sys_exit(1);
+		exit(1);
 	}
 
 	int sring_sz = p.sq_off.array + p.sq_entries * sizeof(uint32_t);
 	int cring_sz = p.cq_off.cqes + p.cq_entries * sizeof(struct io_uring_cqe);
 
 	uring.mmap_ring_size = cring_sz > sring_sz ? cring_sz : sring_sz;
-	uring.mmap_ring = mmap(NULL, uring.mmap_ring_size,
+	intptr_t res = SYSCHECK(mmap(NULL, uring.mmap_ring_size,
 		PROT_READ | PROT_WRITE,
 		MAP_SHARED | MAP_POPULATE,
 		uring.ringfd, IORING_OFF_SQ_RING
-	);
+	));
 
-	if (uring.mmap_ring < 0) {
-		sys_exit(1);
-	}
+	uring.mmap_ring = (void*)res;
 	
 	/* Save useful fields for later easy reference */
 	uring.sq_tail = uring.mmap_ring + p.sq_off.tail;
@@ -49,19 +48,14 @@ uring_queue setup_uring() {
 
 	/* Map in the submission queue entries array */
 	uring.mmap_sqes_size = p.sq_entries * sizeof(struct io_uring_sqe);
-	uring.mmap_sqes = mmap(NULL, 
+	uring.mmap_sqes = (void*)SYSCHECK(mmap(NULL, 
 		uring.mmap_sqes_size,
 		PROT_READ | PROT_WRITE, 
 		MAP_SHARED | MAP_POPULATE,
 		uring.ringfd, IORING_OFF_SQES
-	);
-
-	if (uring.mmap_sqes < 0) {
-		sys_exit(1);
-	}
+	));
 
 	uring.sqes = uring.mmap_sqes;
-
 	return uring;
 }
 
@@ -81,9 +75,8 @@ int read_from_cq(uring_queue* uring) {
 
 	/* Get the entry */
 	struct io_uring_cqe * cqe = &uring->cqes[head & (*uring->cq_mask)];
-	if (cqe->res < 0) {
-		sys_exit(1);
-	}
+	SYSCHECK(cqe->res);
+
 	/* Write barrier so that update to the head are made visible */
 	__atomic_store_n(uring->cq_head, head + 1, __ATOMIC_RELEASE);
 	return cqe->res;
@@ -92,7 +85,7 @@ int read_from_cq(uring_queue* uring) {
 /*
 * Submit a read or a write request to the submission queue.
 * */
-void submit_to_sq(uring_queue * uring, int fd, int op, size_t bufsize, void * buffer, off_t offset) {
+void submit_to_sq(uring_queue * uring, int fd, int op, size_t bufsize, void * buffer) {
 	/* Add our submission queue entry to the tail of the SQE ring buffer */
 	uint32_t tail = *uring->sq_tail;
 	uint32_t index = tail & (*uring->sq_mask);
@@ -114,11 +107,11 @@ void submit_to_sq(uring_queue * uring, int fd, int op, size_t bufsize, void * bu
 			sqe->len = strlen(buffer);
 			break;
 		default:
-			sys_exit(1);
+			exit(1);
 			break;
 	}
 
-	sqe->off = offset;
+	//sqe->off = offset;
 	uring->sq_array[index] = index;
 	/* Update the tail */
 	__atomic_store_n(uring->sq_tail, tail + 1, __ATOMIC_RELEASE);
@@ -128,8 +121,11 @@ void submit_to_sq(uring_queue * uring, int fd, int op, size_t bufsize, void * bu
 	* io_uring_enter() call to wait until min_complete (the 3rd param) events
 	* complete.
 	* */
-	int ret =  io_uring_enter(uring->ringfd, 1, 1, IORING_ENTER_GETEVENTS, NULL);
-	if(ret < 0) {
-		sys_exit(1);
-	}
+	SYSCHECK(io_uring_enter(uring->ringfd, 1, 1, IORING_ENTER_GETEVENTS, NULL));
+}
+
+void uring_close(uring_queue * uring) {
+	SYSCHECK(munmap(uring->mmap_ring, uring->mmap_ring_size));
+	SYSCHECK(munmap(uring->mmap_sqes, uring->mmap_sqes_size));
+	SYSCHECK(close(uring->ringfd));
 }

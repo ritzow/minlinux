@@ -1,8 +1,9 @@
 
 #include "syscall.h"
 #include "uring_ctl.h"
+#include "util.h"
 
-void rootinfo(int);
+void dirlist(const char *);
 bool streq(const char *, const char *);
 
 /* TODDO mremap mprotect */
@@ -26,12 +27,26 @@ asm(
 );
 
 int main(int argc, char * argv[], char * envp[]) {
-	int con = sys_open("/dev/console", O_APPEND | O_RDWR, 0);
+	int con = SYSCHECK(open("/dev/console", O_APPEND | O_RDWR, 0));
     /* Setup io_uring for use */
+
     uring_queue uring = setup_uring();
 
-	off_t offset = 0;
 	char buffer[1024];
+
+//     uintptr_t cur = (uintptr_t)brk(0);
+//     write_int(cur);
+
+//     //write_int((uintptr_t)brk((void*)(cur + 100)));
+
+//    // write_int((uintptr_t)brk(0));
+
+//     //write_int((uintptr_t)brk((void*)(brk(0) - 100)));
+
+    // void * addr = (void*)SYSCHECK(mmap(brk(0), PAGE_SIZE, PROT_READ | PROT_WRITE, 
+    //     MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0));
+
+//     write_int(pos);
 
     /* 
     * A while loop that reads from stdin and writes to stdout.
@@ -39,35 +54,35 @@ int main(int argc, char * argv[], char * envp[]) {
     */
     while (1) {
         /* Initiate read from stdin and wait for it to complete */
-        submit_to_sq(&uring, con, IORING_OP_READ, sizeof buffer, buffer, offset);
+        submit_to_sq(&uring, con, IORING_OP_READ, sizeof buffer, buffer);
         /* Read completion queue entry */
         int res = read_from_cq(&uring);
         if (res > 0) {
             /* Read successful. Write to stdout. */
-            submit_to_sq(&uring, con, IORING_OP_WRITE, sizeof buffer, buffer, offset);
+            submit_to_sq(&uring, con, IORING_OP_WRITE, sizeof buffer, buffer);
             read_from_cq(&uring);
         } else if (res == 0) {
             /* reached EOF */
-            sys_write(con, "End of stdin\n", strlen("End of stdin\n"));
+            SYSCHECK(write(con, "End of stdin\n", strlen("End of stdin\n")));
             break;
         } else if (res < 0) {
-            /* Error reading file */
-			sys_exit(1);
+			ERREXIT("Error reading file");
         }
-        offset += res;
     }
+
+    uring_close(&uring);
 }
 
-void rootinfo(int out) {
-	int rootdir = sys_open("/", O_RDONLY | O_DIRECTORY, 0);
+void dirlist(const char * path) {
+	int rootdir = SYSCHECK(open(path, O_RDONLY | O_DIRECTORY, 0));
 	int64_t count;
 	do {
 		uint8_t buffer[1024];
-		count = sys_getdents64(rootdir, (struct linux_dirent64*)&buffer, sizeof buffer);
+		count = getdents64(rootdir, (struct linux_dirent64*)&buffer, sizeof buffer);
 		for(int64_t pos = 0; pos < count;) {
 			struct linux_dirent64 * entry = (struct linux_dirent64*)(buffer + pos);
-			sys_write(out, entry->d_name, strlen(entry->d_name));
-			sys_write(out, "\n", 1);
+			write(0, entry->d_name, strlen(entry->d_name));
+			write(0, "\n", 1);
 			pos += entry->d_reclen;
 		}
 	} while(count > 0);

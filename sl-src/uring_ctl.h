@@ -1,3 +1,9 @@
+#ifndef __URING_CTL_H__
+#define __URING_CTL_H__
+
+#include "syscall.h"
+#include "util.h"
+
 typedef struct {
 	int ringfd;
 	void * mmap_ring;
@@ -20,4 +26,7 @@ typedef struct {
 
 uring_queue setup_uring();
 int read_from_cq(uring_queue *);
-void submit_to_sq(uring_queue *, int, int, size_t, void *, off_t);
+void submit_to_sq(uring_queue *, int, int, size_t, void *);
+void uring_close(uring_queue *);
+
+#endif

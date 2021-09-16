@@ -23,12 +23,18 @@ SOFTWARE.
 /* Based on nolibc.h, located in the Linux source tree at
    tools/include/nolibc.  */
 
+#ifndef __SYSCALL_H__
+#define __SYSCALL_H__
+
 #include <linux/unistd.h>
 #include <linux/mman.h>
 #include <linux/fcntl.h>
 #include <linux/reboot.h>
 #include <linux/io_uring.h>
 #include <linux/time.h>
+#include <linux/sched.h>
+
+#define PAGE_SIZE 4096
 
 #define NULL ((void*)0)
 
@@ -51,6 +57,9 @@ typedef   signed long       ssize_t;
 typedef unsigned long     uintptr_t;
 typedef   signed long      intptr_t;
 typedef   signed long     ptrdiff_t;
+
+typedef unsigned long long uintmax_t;
+typedef signed   long long intmax_t;
 
 /* for stat() */
 typedef unsigned int          dev_t;
@@ -196,128 +205,86 @@ typedef   signed long        time_t;
 
 #define LOCAL static inline __attribute__((unused))
 
-LOCAL ssize_t sys_write(int fd, const void *buf, size_t count)
+LOCAL ssize_t write(int fd, const void *buf, size_t count)
 {
 	return my_syscall3(__NR_write, fd, buf, count);
 }
 
-LOCAL ssize_t sys_read(int fd, void *buf, size_t count)
+LOCAL ssize_t read(int fd, void *buf, size_t count)
 {
 	return my_syscall3(__NR_read, fd, buf, count);
 }
 
-LOCAL ssize_t sys_reboot(int magic1, int magic2, int cmd, void *arg)
+LOCAL ssize_t reboot(int cmd, void *arg)
 {
-	return my_syscall4(__NR_reboot, magic1, magic2, cmd, arg);
+	return my_syscall4(__NR_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, cmd, arg);
 }
 
-LOCAL int sys_sched_yield(void)
+LOCAL int sched_yield(void)
 {
 	return my_syscall0(__NR_sched_yield);
 }
 
-LOCAL off_t sys_lseek(int fd, off_t offset, int whence)
+LOCAL off_t lseek(int fd, off_t offset, int whence)
 {
 	return my_syscall3(__NR_lseek, fd, offset, whence);
 }
 
-LOCAL int sys_mkdir(const char *path, mode_t mode)
+LOCAL int mkdir(const char *path, mode_t mode)
 {
-#ifdef __NR_mkdirat
 	return my_syscall3(__NR_mkdirat, AT_FDCWD, path, mode);
-#elif defined(__NR_mkdir)
-	return my_syscall2(__NR_mkdir, path, mode);
-#else
-#error Neither __NR_mkdirat nor __NR_mkdir defined, cannot implement sys_mkdir()
-#endif
 }
 
-LOCAL long sys_mknod(const char *path, mode_t mode, dev_t dev)
-{
-#ifdef __NR_mknodat
+LOCAL long mknod(const char *path, mode_t mode, dev_t dev) {
 	return my_syscall4(__NR_mknodat, AT_FDCWD, path, mode, dev);
-#elif defined(__NR_mknod)
-	return my_syscall3(__NR_mknod, path, mode, dev);
-#else
-#error Neither __NR_mknodat nor __NR_mknod defined, cannot implement sys_mknod()
-#endif
 }
 
-LOCAL int sys_mount(const char *src, const char *tgt, const char *fst,
+LOCAL int mount(const char *src, const char *tgt, const char *fst,
 	      unsigned long flags, const void *data)
 {
 	return my_syscall5(__NR_mount, src, tgt, fst, flags, data);
 }
 
-LOCAL int sys_open(const char *path, int flags, mode_t mode)
-{
-#ifdef __NR_openat
+LOCAL int open(const char *path, int flags, mode_t mode) {
 	return my_syscall4(__NR_openat, AT_FDCWD, path, flags, mode);
-#elif defined(__NR_open)
-	return my_syscall3(__NR_open, path, flags, mode);
-#else
-#error Neither __NR_openat nor __NR_open defined, cannot implement sys_open()
-#endif
 }
 
-LOCAL void *sys_brk(void *addr)
+LOCAL void * brk(void *addr)
 {
 	return (void *)my_syscall1(__NR_brk, addr);
 }
 
-static __attribute__((noreturn,unused))
-void sys_exit(int status)
-{
+LOCAL __attribute__((noreturn)) 
+void exit(int status) {
 	my_syscall1(__NR_exit, status & 255);
 	while(1); // shut the "noreturn" warnings.
 }
 
-LOCAL int sys_chdir(const char *path)
-{
+LOCAL int chdir(const char *path) {
 	return my_syscall1(__NR_chdir, path);
 }
 
-LOCAL int sys_chmod(const char *path, mode_t mode)
-{
-#ifdef __NR_fchmodat
+LOCAL int chmod(const char *path, mode_t mode) {
 	return my_syscall4(__NR_fchmodat, AT_FDCWD, path, mode, 0);
-#elif defined(__NR_chmod)
-	return my_syscall2(__NR_chmod, path, mode);
-#else
-#error Neither __NR_fchmodat nor __NR_chmod defined, cannot implement sys_chmod()
-#endif
 }
 
-LOCAL int sys_chown(const char *path, uid_t owner, gid_t group)
-{
-#ifdef __NR_fchownat
+LOCAL int chown(const char *path, uid_t owner, gid_t group) {
 	return my_syscall5(__NR_fchownat, AT_FDCWD, path, owner, group, 0);
-#elif defined(__NR_chown)
-	return my_syscall3(__NR_chown, path, owner, group);
-#else
-#error Neither __NR_fchownat nor __NR_chown defined, cannot implement sys_chown()
-#endif
 }
 
-LOCAL int sys_chroot(const char *path)
-{
+LOCAL int chroot(const char *path) {
 	return my_syscall1(__NR_chroot, path);
 }
 
-LOCAL int sys_close(int fd)
-{
+LOCAL int close(int fd) {
 	return my_syscall1(__NR_close, fd);
 }
 
-#ifdef __NR_dup3
-LOCAL int sys_dup3(int old, int new, int flags)
-{
+LOCAL int dup3(int old, int new, int flags) {
 	return my_syscall3(__NR_dup3, old, new, flags);
 }
 
-#endif
-LOCAL int sys_execve(const char *filename, char *const argv[], char *const envp[])
-{
+LOCAL int execve(const char *filename, char *const argv[], char *const envp[]) {
 	return my_syscall3(__NR_execve, filename, argv, envp);
 }
 
@@ -330,122 +297,18 @@ struct linux_dirent64 {
 	char           d_name[]; /* Filename (null-terminated) */
 };
 
-LOCAL int sys_getdents64(int fd, struct linux_dirent64 *dirp, int count)
-{
+LOCAL int getdents64(int fd, struct linux_dirent64 *dirp, int count) {
 	return my_syscall3(__NR_getdents64, fd, dirp, count);
 }
-LOCAL pid_t sys_getpid(void)
-{
+LOCAL pid_t getpid(void) {
 	return my_syscall0(__NR_getpid);
 }
-LOCAL int sys_ioctl(int fd, unsigned long req, void *value)
-{
+LOCAL int ioctl(int fd, unsigned long req, void *value) {
 	return my_syscall3(__NR_ioctl, fd, req, value);
 }
 
-LOCAL void *memmove(void *dst, const void *src, size_t len)
-{
-	ssize_t pos = (dst <= src) ? -1 : (long)len;
-	void *ret = dst;
-
-	while (len--) {
-		pos += (dst <= src) ? 1 : -1;
-		((char *)dst)[pos] = ((char *)src)[pos];
-	}
-	return ret;
-}
-
-LOCAL void *memset(void *dst, int b, size_t len)
-{
-	char *p = dst;
-
-	while (len--)
-		*(p++) = b;
-	return dst;
-}
-
-LOCAL int memcmp(const void *s1, const void *s2, size_t n)
-{
-	size_t ofs = 0;
-	char c1 = 0;
-
-	while (ofs < n && !(c1 = ((char *)s1)[ofs] - ((char *)s2)[ofs])) {
-		ofs++;
-	}
-	return c1;
-}
-LOCAL char *strcpy(char *dst, const char *src)
-{
-	char *ret = dst;
-
-	while ((*dst++ = *src++));
-	return ret;
-}
-
-LOCAL size_t nolibc_strlen(const char *str)
-{
-	size_t len;
-
-	for (len = 0; str[len]; len++);
-	return len;
-}
-
-LOCAL char *strchr(const char *s, int c)
-{
-	while (*s) {
-		if (*s == (char)c)
-			return (char *)s;
-		s++;
-	}
-	return NULL;
-}
-
-LOCAL const char *ltoa(long in)
-{
-	/* large enough for -9223372036854775808 */
-	static char buffer[21];
-	char       *pos = buffer + sizeof(buffer) - 1;
-	int         neg = in < 0;
-	unsigned long n = neg ? -in : in;
-
-	*pos-- = '\0';
-	do {
-		*pos-- = '0' + n % 10;
-		n /= 10;
-		if (pos < buffer)
-			return pos + 1;
-	} while (n);
-
-	if (neg)
-		*pos-- = '-';
-	return pos + 1;
-}
-
-#define strlen(str) ({                          \
-	__builtin_constant_p((str)) ?           \
-		__builtin_strlen((str)) :       \
-		nolibc_strlen((str));           \
-})
-
-#define xstr(a) str(a)
-#define str(a) #a
-#define MARK() sys_write(0, __FILE__ ":" xstr(__LINE__) "\n", \
-    __builtin_strlen(__FILE__ ":" xstr(__LINE__) "\n"))
-
-LOCAL void write_int(uint64_t val) {
-	const char * str = ltoa(val);
-	sys_write(0, str, strlen(str));
-	sys_write(0, "\n", strlen("\n"));
-}
-
-__attribute__((weak,unused))
-void *memcpy(void *dst, const void *src, size_t len)
-{
-	return memmove(dst, src, len);
-}
-
-LOCAL void * mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
-	return (void*)my_syscall6(__NR_mmap, addr, length, prot, flags, fd, offset);
+LOCAL intptr_t mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+	return my_syscall6(__NR_mmap, addr, length, prot, flags, fd, offset);
 }
 
 LOCAL int munmap(void * addr, size_t length) {
@@ -459,10 +322,16 @@ LOCAL int io_uring_setup(unsigned entries, struct io_uring_params *p) {
 LOCAL int io_uring_enter(int ring_fd, uint32_t to_submit,
     uint32_t min_complete, uint32_t flags, sigset_t *sig) {
     return my_syscall6(__NR_io_uring_enter, ring_fd, to_submit, min_complete,
-                         flags, sig, 0);
+        flags, sig, 0);
 }
 
 LOCAL int io_uring_register(unsigned int fd, unsigned int opcode, void *arg, 
 	unsigned int nr_args) {
 	return my_syscall4(__NR_io_uring_register, fd, opcode, arg, nr_args);
 }
+
+LOCAL long clone3(struct clone_args *cl_args, size_t size) {
+	return my_syscall2(__NR_clone3, cl_args, size);
+}
+
+#endif

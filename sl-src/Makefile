@@ -4,8 +4,17 @@ CFLAGS=-Wall -g -Werror -Wno-unused-variable -fno-asynchronous-unwind-tables \
 	-march=x86-64
 #-march=x86-64-v3
 
-init: uring_ctl.o main.c syscall.h uring_ctl.h
-	$(CC) $(CFLAGS) main.c uring_ctl.o -o init # -s
+SHARED_HEADERS=syscall.h util.h
 
-uring_ctl.o: uring_ctl.c syscall.h uring_ctl.h
+init: uring_ctl.o main.c uring_ctl.h util.o $(SHARED_HEADERS)
+	$(CC) $(CFLAGS) -s main.c uring_ctl.o util.o -o init
+
+uring_ctl.o: uring_ctl.c uring_ctl.h $(SHARED_HEADERS)
 	$(CC) $(CFLAGS) -c uring_ctl.c -o uring_ctl.o
+
+util.o: util.c $(SHARED_HEADERS)
+	$(CC) $(CFLAGS) -c util.c -o util.o
+
+.PHONY: clean
+clean:
+	rm uring_ctl.o util.o init
