@@ -82,9 +82,6 @@ int read_from_cq(uring_queue* uring) {
 	return cqe->res;
 }
 
-/*
-* Submit a read or a write request to the submission queue.
-* */
 void submit_to_sq(uring_queue * uring, int fd, int op, size_t bufsize, void * buffer) {
 	/* Add our submission queue entry to the tail of the SQE ring buffer */
 	uint32_t tail = *uring->sq_tail;

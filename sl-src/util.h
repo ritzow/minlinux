@@ -18,7 +18,7 @@ typedef struct {
 #define xstr(a) str(a)
 #define str(a) #a
 #define MARK() write(0, __FILE__ ":" xstr(__LINE__) "\n", \
-    __builtin_strlen(__FILE__ ":" xstr(__LINE__) "\n"))
+	__builtin_strlen(__FILE__ ":" xstr(__LINE__) "\n"))
 
 #define WRITESTR(str) ({\
 	write(0, str, __builtin_strlen(str));\
