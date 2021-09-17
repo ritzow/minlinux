@@ -4,7 +4,7 @@ KERNEL_CONFIG_FILE=boot.conf
 LINUX_SRC_URL=https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.14.2.tar.xz
 LINUX_SRC_DIR=build/linux-5.14.2
 KERNEL_BINARY_FILE=$(LINUX_SRC_DIR)/$(shell $(MAKE) --silent -C $(LINUX_SRC_DIR) image_name)
-CONFIG_SET=$(LINUX_SRC_DIR)/scripts/config --file $(LINUX_SRC_DIR)/.config
+CONFIG_SET := $(LINUX_SRC_DIR)/scripts/config --file $(LINUX_SRC_DIR)/.config
 
 copy-config = cp $(LINUX_SRC_DIR)/.config $(1)/$(2)-$(shell date --iso-8601=seconds).config
 
