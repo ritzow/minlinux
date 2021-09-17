@@ -3,6 +3,9 @@
 #include "uring_ctl.h"
 #include "util.h"
 
+/* for struct iovec */
+#include <linux/uio.h>
+
 void dirlist(const char *);
 bool streq(const char *, const char *);
 
@@ -48,16 +51,28 @@ int main(int argc, char * argv[], char * envp[]) {
 
 //     write_int(pos);
 
-	/* 
-	* A while loop that reads from stdin and writes to stdout.
-	* Breaks on EOF.
-	*/
+	// struct iovec buffer = {
+	// 	.iov_base 
+	// };
+
+	//SYSCHECK(io_uring_register(uring.ringfd, IORING_RGISTER_BUFFERS, &buffer, 1));
+
+	struct timespec time;
+	SYSCHECK(clock_gettime(CLOCK_MONOTONIC, &time));
+
+	write_int(time.tv_sec);
+	WRITESTR(" sec ");
+	write_int(time.tv_nsec);
+	WRITESTR(" nsec\n");
 
 	while (1) {
 		/* Initiate read from stdin and wait for it to complete */
 		submit_to_sq(&uring, con, IORING_OP_READ, sizeof buffer, buffer);
 		/* Read completion queue entry */
 		int res = read_from_cq(&uring);
+		WRITESTR("\"");
+		write(0, buffer, strlen(buffer));
+		WRITESTR("\"");
 		if (res > 0) {
 			/* Read successful. Write to stdout. */
 			submit_to_sq(&uring, con, IORING_OP_WRITE, sizeof buffer, buffer);

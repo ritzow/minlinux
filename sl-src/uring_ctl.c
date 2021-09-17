@@ -75,11 +75,11 @@ int read_from_cq(uring_queue* uring) {
 
 	/* Get the entry */
 	struct io_uring_cqe * cqe = &uring->cqes[head & (*uring->cq_mask)];
-	SYSCHECK(cqe->res);
+	int res = SYSCHECK(cqe->res);
 
 	/* Write barrier so that update to the head are made visible */
 	__atomic_store_n(uring->cq_head, head + 1, __ATOMIC_RELEASE);
-	return cqe->res;
+	return res;
 }
 
 void submit_to_sq(uring_queue * uring, int fd, int op, size_t bufsize, void * buffer) {
@@ -92,6 +92,8 @@ void submit_to_sq(uring_queue * uring, int fd, int op, size_t bufsize, void * bu
 	sqe->opcode = op;
 	sqe->fd = fd;
 	sqe->addr = (uintptr_t)buffer;
+	sqe->flags = 0;
+	sqe->ioprio = 0;
 
 	switch(op) {
 		case IORING_OP_READ:

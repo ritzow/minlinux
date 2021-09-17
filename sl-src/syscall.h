@@ -61,7 +61,8 @@ typedef   signed long     ptrdiff_t;
 typedef unsigned long long uintmax_t;
 typedef signed   long long intmax_t;
 
-/* for stat() */
+typedef int clockid_t;
+
 typedef unsigned int          dev_t;
 typedef unsigned long         ino_t;
 typedef unsigned long long	ino64_t;
@@ -315,6 +316,15 @@ LOCAL int munmap(void * addr, size_t length) {
 	return my_syscall2(__NR_munmap, addr, length);
 }
 
+LOCAL intptr_t mremap(void *old_address, size_t old_size, size_t new_size, int flags) {
+	/* TODO implement new_address (is it stored in a register?) */
+	return my_syscall4(__NR_mremap, old_address, old_size, new_size, flags);
+}
+
+LOCAL int mprotect(void *addr, size_t len, int prot) {
+	return my_syscall3(__NR_mprotect, addr, len, prot);
+}
+
 LOCAL int io_uring_setup(unsigned entries, struct io_uring_params *p) {
     return my_syscall2(__NR_io_uring_setup, entries, p);
 }
@@ -332,6 +342,10 @@ LOCAL int io_uring_register(unsigned int fd, unsigned int opcode, void *arg,
 
 LOCAL long clone3(struct clone_args *cl_args, size_t size) {
 	return my_syscall2(__NR_clone3, cl_args, size);
+}
+
+LOCAL int clock_gettime(clockid_t clockid, struct timespec *tp) {
+	return my_syscall2(__NR_clock_gettime, clockid, tp);
 }
 
 #endif
