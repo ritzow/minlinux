@@ -89,7 +89,7 @@ install-kernel-headers:
 	cp -r $(LINUX_SRC_DIR)/tools/include/nolibc build/include
 
 .PHONY: build-init
-build-init:
+build-init: install-kernel-headers
 	$(MAKE) -C sl-src LINUX_INCLUDES="$(shell realpath build/include)" init
 
 .PHONY: apt-install-kernel-reqs

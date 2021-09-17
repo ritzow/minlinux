@@ -18,10 +18,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-*/
+Based on nolibc.h, located in the Linux source tree at tools/include/nolibc
 
-/* Based on nolibc.h, located in the Linux source tree at
-   tools/include/nolibc.  */
+*/
 
 #ifndef __SYSCALL_H__
 #define __SYSCALL_H__
