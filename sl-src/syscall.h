@@ -32,6 +32,7 @@ Based on nolibc.h, located in the Linux source tree at tools/include/nolibc
 #include <linux/io_uring.h>
 #include <linux/time.h>
 #include <linux/sched.h>
+#include <linux/futex.h>
 
 #define PAGE_SIZE 4096
 
@@ -346,5 +347,16 @@ LOCAL long clone3(struct clone_args *cl_args, size_t size) {
 LOCAL int clock_gettime(clockid_t clockid, struct timespec *tp) {
 	return my_syscall2(__NR_clock_gettime, clockid, tp);
 }
+
+/* TODO this system call should be separated into multiple, depending on op */
+LOCAL long futex(uint32_t *uaddr, int futex_op, uint32_t val,
+	const struct timespec *timeout, /* or: uint32_t val2 */
+	uint32_t *uaddr2, uint32_t val3) {
+	return my_syscall6(__NR_futex, uaddr, futex_op, val, timeout, uaddr2, val3);
+}
+
+// LOCAL int fsopen(const char * fsname, unsigned int flags) {
+
+// }
 
 #endif

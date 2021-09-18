@@ -33,7 +33,7 @@ int main(int argc, char * argv[], char * envp[]) {
 	int con = SYSCHECK(open("/dev/console", O_APPEND | O_RDWR, 0));
 	/* Setup io_uring for use */
 
-	uring_queue uring = setup_uring();
+	uring_queue uring = uring_init(16);
 
 	char buffer[1024];
 
@@ -70,16 +70,26 @@ int main(int argc, char * argv[], char * envp[]) {
 	WRITESTR(" nsec\n");
 
 	while (1) {
-		/* Initiate read from stdin and wait for it to complete */
-		submit_to_sq(&uring, con, IORING_OP_READ, sizeof buffer, buffer);
-		/* Read completion queue entry */
+		//uring_submit_write(&uring, con, "Command: ", strlen("Command: "));
+
+		/* linked write */
+		struct io_uring_sqe * sqe = uring_new_submission(&uring);
+		sqe->opcode = IORING_OP_WRITE;
+		sqe->fd = con;
+		sqe->addr = (uintptr_t)"Command: ";
+		sqe->len = strlen("Command: ");
+		sqe->flags = IOSQE_IO_LINK;
+		sqe->ioprio = 0;
+		
+		uring_submit_read(&uring, con, buffer, sizeof buffer);
+		/* todo uring_submit return number of new entries and iterate over */
+		memset(buffer, 0, sizeof buffer);
+		uring_wait(&uring, 2);
+		read_from_cq(&uring);
 		int res = read_from_cq(&uring);
-		WRITESTR("\"");
-		write(0, buffer, strlen(buffer));
-		WRITESTR("\"");
 		if (res > 0) {
-			/* Read successful. Write to stdout. */
-			submit_to_sq(&uring, con, IORING_OP_WRITE, sizeof buffer, buffer);
+			uring_submit_write(&uring, con, buffer, strlen(buffer));
+			uring_wait(&uring, 1);
 			read_from_cq(&uring);
 		} else if (res == 0) {
 			/* reached EOF */
