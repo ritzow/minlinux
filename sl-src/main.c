@@ -57,6 +57,10 @@ int main(int argc, char * argv[], char * envp[]) {
 
 	//SYSCHECK(io_uring_register(uring.ringfd, IORING_RGISTER_BUFFERS, &buffer, 1));
 
+	SYSCHECK(mount(NULL, "/proc", "proc", MS_NOEXEC | MS_RDONLY, NULL));
+
+	SYSCHECK(mount(NULL, "/sys", "sysfs", MS_NOEXEC | MS_RDONLY, NULL));
+
 	struct timespec time;
 	SYSCHECK(clock_gettime(CLOCK_MONOTONIC, &time));
 
