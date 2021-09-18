@@ -133,6 +133,13 @@ list-initramfs:
 download: dirs
 	curl -s $(LINUX_SRC_URL) | tar --extract --xz --directory build -f -
 
+.PHONY: download-manual
+ download-manual:
+	git clone --single-branch --depth 1 \
+		git://git.kernel.org/pub/scm/docs/man-pages/man-pages.git build/man-src
+	$(MAKE) -C build/man-src -j install prefix=../manual
+	rm -r build/man-src
+
 #Create a backup point of the current .config
 .PHONY: backup-config
 backup-config: dirs
@@ -165,5 +172,9 @@ kernel-clean:
 dirs:
 	mkdir --parents build/initramfs records
 	
+.PHONY: viewman
+viewman:
+	@man --manpath=build/manual/share/man $(page) || true
+
 .DEFAULT:
 	@echo "Unsupported target"
