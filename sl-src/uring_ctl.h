@@ -38,10 +38,15 @@ struct io_uring_sqe *uring_new_submission(uring_queue *);
 void uring_wait(uring_queue *, uint32_t count);
 
 void uring_submit_read(uring_queue *, int, void *, size_t);
-void uring_submit_write(uring_queue *, int, void *, size_t);
+void uring_submit_write_linked(uring_queue *, int, void *, size_t);
 
 void uring_close(uring_queue *);
-int read_from_cq(uring_queue *);
-//void submit_to_sq(uring_queue *, int, int, size_t, void *);
+
+typedef struct {
+	struct io_uring_cqe entry;
+	bool success;
+} cqe;
+
+cqe uring_result(uring_queue *);
 
 #endif

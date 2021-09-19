@@ -73,22 +73,26 @@ uring_queue uring_init(uint32_t size) {
 * In this function, we read completion events from the completion queue.
 * We dequeue the CQE, update and head and return the result of the operation.
 * */
-int read_from_cq(uring_queue* uring) {
+cqe uring_result(uring_queue* uring) {
 	/* Read barrier */
 	uint32_t head = __atomic_load_n(uring->cq_head, __ATOMIC_ACQUIRE);
 
 	/* If head == tail, the buffer is empty. */
 	if (head == *uring->cq_tail) {
-		return -1;
+		return (cqe) {
+			.success = false
+		};
 	}
 
 	/* Get the entry */
-	struct io_uring_cqe * cqe = &uring->cqes[head & (*uring->cq_mask)];
-	int res = SYSCHECK(cqe->res);
+	struct io_uring_cqe res = uring->cqes[head & *uring->cq_mask];
 
 	/* Write barrier so that update to the head are made visible */
 	__atomic_store_n(uring->cq_head, head + 1, __ATOMIC_RELEASE);
-	return res;
+	return (cqe) {
+		.entry = res,
+		.success = true
+	};
 }
 
 /* From liburing io_uring_get_sqe */
@@ -153,55 +157,14 @@ void uring_submit_read(uring_queue * uring, int fd, void * dst, size_t count) {
 	sqe->ioprio = 0;
 }
 
-void uring_submit_write(uring_queue * uring, int fd, void * src, size_t count) {
+void uring_submit_write_linked(uring_queue * uring, int fd, void * src, size_t count) {
 	struct io_uring_sqe * sqe = uring_new_submission(uring);
 	sqe->opcode = IORING_OP_WRITE;
 	sqe->fd = fd;
 	sqe->addr = (uintptr_t)src;
 	sqe->len = count;
-	sqe->flags = 0;
+	sqe->flags = IOSQE_IO_LINK;
 	sqe->ioprio = 0;
-}
-
-void submit_to_sq(uring_queue * uring, int fd, int op, size_t bufsize, void * buffer) {
-	/* Add our submission queue entry to the tail of the SQE ring buffer */
-	uint32_t tail = *uring->sq_tail;
-	uint32_t index = tail & (*uring->sq_mask);
-	struct io_uring_sqe *sqe = &uring->sqes[index];
-
-	/* Fill in the parameters required for the read or write operation */
-	sqe->opcode = op;
-	sqe->fd = fd;
-	sqe->addr = (uintptr_t)buffer;
-	sqe->flags = 0;
-	sqe->ioprio = 0;
-
-	switch(op) {
-		case IORING_OP_READ:
-			/* So that it's null terminated */
-			memset(buffer, 0, bufsize);
-			sqe->len = bufsize;
-			break;
-		case IORING_OP_WRITE:
-			/* Could cause error if exactly bufsize length input? */
-			sqe->len = strlen(buffer);
-			break;
-		default:
-			exit(1);
-			break;
-	}
-
-	//sqe->off = offset;
-	uring->sq_array[index] = index;
-	/* Update the tail */
-	__atomic_store_n(uring->sq_tail, tail + 1, __ATOMIC_RELEASE);
-	/*
-	* Tell the kernel we have submitted events with the io_uring_enter() system
-	* call. We also pass in the IOURING_ENTER_GETEVENTS flag which causes the
-	* io_uring_enter() call to wait until min_complete (the 3rd param) events
-	* complete.
-	* */
-	SYSCHECK(io_uring_enter(uring->ringfd, 1, 1, IORING_ENTER_GETEVENTS, NULL));
 }
 
 void uring_close(uring_queue * uring) {

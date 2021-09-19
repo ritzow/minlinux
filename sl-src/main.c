@@ -6,8 +6,11 @@
 /* for struct iovec */
 #include <linux/uio.h>
 
-void dirlist(const char *);
+void dirlist(uring_queue *, const char *);
 bool streq(const char *, const char *);
+char * find_arg(char *);
+char * terminate_arg(char *);
+void process_command(char *, uring_queue *);
 
 /* TODDO mremap mprotect */
 
@@ -31,11 +34,6 @@ asm(
 
 int main(int argc, char * argv[], char * envp[]) {
 	int con = SYSCHECK(open("/dev/console", O_APPEND | O_RDWR, 0));
-	/* Setup io_uring for use */
-
-	uring_queue uring = uring_init(16);
-
-	char buffer[1024];
 
 //     uintptr_t cur = (uintptr_t)brk(0);
 //     write_int(cur);
@@ -49,48 +47,42 @@ int main(int argc, char * argv[], char * envp[]) {
 	// void * addr = (void*)SYSCHECK(mmap(brk(0), PAGE_SIZE, PROT_READ | PROT_WRITE, 
 	//     MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0));
 
-//     write_int(pos);
-
-	// struct iovec buffer = {
-	// 	.iov_base 
-	// };
-
-	//SYSCHECK(io_uring_register(uring.ringfd, IORING_RGISTER_BUFFERS, &buffer, 1));
-
-	SYSCHECK(mount(NULL, "/proc", "proc", MS_NOEXEC | MS_RDONLY, NULL));
-
-	SYSCHECK(mount(NULL, "/sys", "sysfs", MS_NOEXEC | MS_RDONLY, NULL));
-
 	struct timespec time;
-	SYSCHECK(clock_gettime(CLOCK_MONOTONIC, &time));
+	SYSCHECK(clock_gettime(CLOCK_BOOTTIME, &time));
 
+	WRITESTR("Boot to init took ");
 	write_int(time.tv_sec);
 	WRITESTR(" sec ");
 	write_int(time.tv_nsec);
 	WRITESTR(" nsec\n");
 
-	while (1) {
-		//uring_submit_write(&uring, con, "Command: ", strlen("Command: "));
+	SYSCHECK(mount(NULL, "/proc", "proc", MS_NOEXEC | MS_RDONLY, NULL));
+	SYSCHECK(mount(NULL, "/sys", "sysfs", MS_NOEXEC | MS_RDONLY, NULL));
 
-		/* linked write */
-		struct io_uring_sqe * sqe = uring_new_submission(&uring);
-		sqe->opcode = IORING_OP_WRITE;
-		sqe->fd = con;
-		sqe->addr = (uintptr_t)"Command: ";
-		sqe->len = strlen("Command: ");
-		sqe->flags = IOSQE_IO_LINK;
-		sqe->ioprio = 0;
-		
+	uring_queue uring = uring_init(16);
+	char buffer[1024];
+
+	while (1) {
+		uring_submit_write_linked(&uring, con, "Command: ", strlen("Command: "));
 		uring_submit_read(&uring, con, buffer, sizeof buffer);
 		/* todo uring_submit return number of new entries and iterate over */
 		memset(buffer, 0, sizeof buffer);
 		uring_wait(&uring, 2);
-		read_from_cq(&uring);
-		int res = read_from_cq(&uring);
+		SYSCHECK(uring_result(&uring).entry.res);
+		int res = uring_result(&uring).entry.res;
 		if (res > 0) {
-			uring_submit_write(&uring, con, buffer, strlen(buffer));
-			uring_wait(&uring, 1);
-			read_from_cq(&uring);
+			/* TODO support reading less than a full line with newline char */
+			if(buffer[res - 1] != '\n') {
+				uring_submit_write_linked(&uring, con, "Line too long\n", 
+					strlen("line too long\n"));
+				uring_wait(&uring, 1);
+				SYSCHECK(uring_result(&uring).entry.res);
+				/* TODO read until newline */
+				continue;
+			}
+
+			buffer[res - 1] = '\0';
+			process_command(buffer, &uring);
 		} else if (res == 0) {
 			/* reached EOF */
 			SYSCHECK(write(con, "End of stdin\n", strlen("End of stdin\n")));
@@ -103,8 +95,45 @@ int main(int argc, char * argv[], char * envp[]) {
 	uring_close(&uring);
 }
 
-void dirlist(const char * path) {
-	int rootdir = SYSCHECK(open(path, O_RDONLY | O_DIRECTORY, 0));
+void process_command(char * args, uring_queue * uring) {
+	char * prog = find_arg(args);
+
+	if(prog == NULL) {
+		return;
+	}
+
+	char * next = terminate_arg(prog);
+
+	if(streq(prog, "ls")) {
+		char * dir = find_arg(next);
+		if(dir == NULL) {
+			dirlist(uring, "/");
+		} else {
+			char * next = terminate_arg(dir);
+			dirlist(uring, dir);
+		}
+	} else if(streq(prog, "ps")) {
+		WRITESTR("ps not implemented\n");
+	} else if(streq(prog, "cat")) {
+		WRITESTR("cat not implemented\n");
+	} else if(streq(prog, "exit")) {
+		reboot_hard(LINUX_REBOOT_CMD_POWER_OFF);
+	} else {
+		WRITESTR("Unknown command\n");
+	}
+}
+
+void dirlist(uring_queue *uring, const char * path) {
+	/* TODO use uring openat2 */
+	int rootdir = open(path, O_RDONLY | O_DIRECTORY, 0);
+	if(rootdir < 0) {
+		WRITESTR("Error opening directory ");
+		WRITESTR(path);
+		WRITESTR(": ");
+		write_int(rootdir);
+		WRITESTR("\n");
+		return;
+	}
 	int64_t count;
 	do {
 		uint8_t buffer[1024];
@@ -116,6 +145,29 @@ void dirlist(const char * path) {
 			pos += entry->d_reclen;
 		}
 	} while(count > 0);
+}
+
+/* Skip blanks to find the next arg, or NULL */
+char * find_arg(char * str) {
+	while(*str == ' '|| *str == '\t') {
+		str++;
+	}
+	if(*str == '\0') {
+		return NULL;
+	}
+	return str;
+}
+
+/* Returns the rest of the string after thlse current arg, or NULL */
+char * terminate_arg(char * str) {
+	while(*str != ' ' && *str != '\t' && *str != '\0') {
+		str++;
+	}
+	if(*str == '\0') {
+		return str;
+	}
+	*str = '\0';
+	return str + 1;
 }
 
 bool streq(const char * str1, const char * str2) {

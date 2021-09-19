@@ -216,9 +216,15 @@ LOCAL ssize_t read(int fd, void *buf, size_t count)
 	return my_syscall3(__NR_read, fd, buf, count);
 }
 
-LOCAL ssize_t reboot(int cmd, void *arg)
+LOCAL ssize_t reboot(int cmd, void * arg)
 {
 	return my_syscall4(__NR_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, cmd, arg);
+}
+
+LOCAL __attribute__((noreturn)) void reboot_hard(int cmd)
+{
+	my_syscall4(__NR_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, cmd, NULL);
+	while(1);
 }
 
 LOCAL int sched_yield(void)
