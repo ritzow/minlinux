@@ -140,7 +140,15 @@ download: dirs
 	$(MAKE) -C build/man-src -j install prefix=../manual
 	rm -r build/man-src
 
-#Create a backup point of the current .config
+.PHONY: download-jemalloc
+download-jemalloc:
+	@#git clone doesn't have ./configure script, requires autoconf
+	@#git clone --depth 1 --single-branch --branch master \
+	@#	https://github.com/jemalloc/jemalloc.git build/jemalloc
+	curl -L -s https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2 | \
+		tar --bzip2 --extract --directory build --file=-
+
+#Create a backup point of the current .configls
 .PHONY: backup-config
 backup-config: dirs
 	$(call copy-config,records,backup)
