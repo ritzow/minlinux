@@ -10,9 +10,7 @@ void dirlist(uring_queue *, const char *);
 bool streq(const char *, const char *);
 char * find_arg(char *);
 char * terminate_arg(char *);
-void process_command(char *, uring_queue *);
-
-/* TODDO mremap mprotect */
+void process_command(char *, uring_queue *, char * envp[]);
 
 /* startup code from nolibc.h */
 asm(
@@ -82,7 +80,7 @@ int main(int argc, char * argv[], char * envp[]) {
 			}
 
 			buffer[res - 1] = '\0';
-			process_command(buffer, &uring);
+			process_command(buffer, &uring, envp);
 		} else if (res == 0) {
 			/* reached EOF */
 			SYSCHECK(write(con, "End of stdin\n", strlen("End of stdin\n")));
@@ -95,7 +93,7 @@ int main(int argc, char * argv[], char * envp[]) {
 	uring_close(&uring);
 }
 
-void process_command(char * args, uring_queue * uring) {
+void process_command(char * args, uring_queue * uring, char * envp[]) {
 	char * prog = find_arg(args);
 
 	if(prog == NULL) {
@@ -116,6 +114,11 @@ void process_command(char * args, uring_queue * uring) {
 		WRITESTR("ps not implemented\n");
 	} else if(streq(prog, "cat")) {
 		WRITESTR("cat not implemented\n");
+	} else if(streq(prog, "env")) {
+		for(size_t i = 0; envp[i] != NULL; i++) {
+			WRITESTR(envp[i]);
+			WRITESTR("\n");
+		}
 	} else if(streq(prog, "exit")) {
 		reboot_hard(LINUX_REBOOT_CMD_POWER_OFF);
 	} else {
