@@ -204,8 +204,8 @@ typedef   signed long        time_t;
 	_ret;                                                                 \
 })
 
-#define LOCAL static inline __attribute__((unused))
-
+#define LOCAL static inline //__attribute__((visibility("protected")))
+ 
 LOCAL ssize_t write(int fd, const void *buf, size_t count)
 {
 	return my_syscall3(__NR_write, fd, buf, count);
