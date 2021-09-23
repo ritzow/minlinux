@@ -1,8 +1,8 @@
 #Automatically passed to sub-makes
 MAKEFLAGS += --no-print-directory --no-builtin-rules --no-builtin-variables
 KERNEL_CONFIG_FILE=boot.conf
-LINUX_SRC_URL=https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.14.2.tar.xz
-LINUX_SRC_DIR=build/linux-5.14.2
+LINUX_SRC_URL=https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.14.7.tar.xz
+LINUX_SRC_DIR=build/linux-5.14.7
 KERNEL_BINARY_FILE=$(LINUX_SRC_DIR)/$(shell $(MAKE) --silent -C $(LINUX_SRC_DIR) image_name)
 CONFIG_SET := $(LINUX_SRC_DIR)/scripts/config --file $(LINUX_SRC_DIR)/.config
 
@@ -56,7 +56,7 @@ buildrun: build
 .PHONY: build-all
 build-all:
 	$(MAKE) dirs
-	$(MAKE) download
+	$(MAKE) download-kernel
 	$(MAKE) use-saved-config
 	$(MAKE) gen-key
 	$(MAKE) build-kernel-initial
@@ -109,7 +109,7 @@ build-kernel-initial:
 
 #Build the modules without installing them in the initramfs
 .PHONY: build-modules
-build-modules-initial:
+build-modules:
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 modules
 	$(MAKE) -C $(LINUX_SRC_DIR) INSTALL_MOD_PATH=../initramfs modules_install #INSTALL_MOD_STRIP=1 
 #TODO generate initramfs.conf with all modules and modprobe included
@@ -129,8 +129,8 @@ list-initramfs:
 	@cat $(LINUX_SRC_DIR)/usr/initramfs_data.cpio | cpio --list
 	
 #Download the kernel source code
-.PHONY: download
-download: dirs
+.PHONY: download-kernel
+download-kernel: dirs
 	curl -s $(LINUX_SRC_URL) | tar --extract --xz --directory build -f -
 
 gitclone=git clone --single-branch --depth 1 --branch $(1) $(3) $(2)
