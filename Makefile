@@ -90,7 +90,7 @@ install-kernel-headers:
 
 .PHONY: build-init
 build-init: install-kernel-headers
-	$(MAKE) -C sl-src MUSL_DIR=$(abspath build/musl) BUILD_DIR="$(abspath build)" init
+	$(MAKE) -C init MUSL_DIR=$(abspath build/musl) BUILD_DIR="$(abspath build)" init
 
 .PHONY: apt-install-kernel-reqs
 apt-install-kernel-reqs:
