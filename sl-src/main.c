@@ -144,7 +144,23 @@ void dirlist(uring_queue *uring, const char * path) {
 		for(int64_t pos = 0; pos < count;) {
 			struct linux_dirent64 * entry = (struct linux_dirent64*)(buffer + pos);
 			write(0, entry->d_name, strlen(entry->d_name));
-			write(0, "\n", 1);
+			switch(entry->d_type) {
+				case DT_DIR:
+					WRITESTR("/\n");
+					break;
+				case DT_REG:
+					WRITESTR("\n");
+					break;
+				case DT_FIFO:
+				case DT_CHR:
+				case DT_BLK:
+				case DT_LNK:
+				case DT_SOCK:
+				case DT_UNKNOWN:
+				default:
+					WRITESTR("?\n");
+					break;
+			}
 			pos += entry->d_reclen;
 		}
 	} while(count > 0);
@@ -185,4 +201,3 @@ bool streq(const char * str1, const char * str2) {
 		str2++;
 	} while(true);
 }
-

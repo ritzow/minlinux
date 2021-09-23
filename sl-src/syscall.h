@@ -34,6 +34,7 @@ Based on nolibc.h, located in the Linux source tree at tools/include/nolibc
 #include <linux/sched.h>
 #include <linux/futex.h>
 
+
 #define PAGE_SIZE 4096
 
 #define NULL ((void*)0)
@@ -294,6 +295,17 @@ LOCAL int dup3(int old, int new, int flags) {
 LOCAL int execve(const char *filename, char *const argv[], char *const envp[]) {
 	return my_syscall3(__NR_execve, filename, argv, envp);
 }
+
+typedef enum {
+	DT_UNKNOWN= 0,
+	DT_FIFO   = 1,
+	DT_CHR    = 2,
+	DT_DIR    = 4,
+	DT_BLK    = 6,
+	DT_REG    = 8,
+	DT_LNK    =10,
+	DT_SOCK   =12
+} dirtype;
 
 /* TODO this might not have the correct layout for the system call */
 struct linux_dirent64 {
