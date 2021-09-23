@@ -46,8 +46,8 @@ configure-kernel:
 
 .PHONY: run
 run: 
-	qemu-system-x86_64 -nographic -sandbox on \
-	-kernel $(KERNEL_BINARY_FILE) -append "console=ttyS0"
+	qemu-system-x86_64 -vga none -nographic -sandbox on \
+	-kernel $(KERNEL_BINARY_FILE) -append "console=ttyS0" -bios /usr/share/ovmf/OVMF.fd 
 
 .PHONY: buildrun
 buildrun: build
@@ -90,7 +90,7 @@ install-kernel-headers:
 
 .PHONY: build-init
 build-init: install-kernel-headers
-	$(MAKE) -C sl-src LINUX_INCLUDES="$(shell realpath build/include)" init
+	$(MAKE) -C sl-src MUSL_DIR=$(abspath build/musl) BUILD_DIR="$(abspath build)" init
 
 .PHONY: apt-install-kernel-reqs
 apt-install-kernel-reqs:
@@ -112,11 +112,11 @@ build-kernel-initial:
 build-modules-initial:
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 modules
 	$(MAKE) -C $(LINUX_SRC_DIR) INSTALL_MOD_PATH=../initramfs modules_install #INSTALL_MOD_STRIP=1 
-	#TODO generate initramfs.conf with all modules and modprobe included
-	@#Bootconfig won't compile, missing symbol "ret"
-	@#$(MAKE) -C $(LINUX_SRC_DIR)/tools/bootconfig
-	@#Add boot config (alternative to kernal command line args)
-	@#tools/bootconfig/bootconfig -a $(KERNEL_CONFIG_FILE) $(INITRAMFS_FILE)
+#TODO generate initramfs.conf with all modules and modprobe included
+#Bootconfig won't compile, missing symbol "ret"
+#$(MAKE) -C $(LINUX_SRC_DIR)/tools/bootconfig
+#Add boot config (alternative to kernal command line args)
+#tools/bootconfig/bootconfig -a $(KERNEL_CONFIG_FILE) $(INITRAMFS_FILE)
 
 .PHONY: gen-key
 gen-key:
@@ -133,22 +133,56 @@ list-initramfs:
 download: dirs
 	curl -s $(LINUX_SRC_URL) | tar --extract --xz --directory build -f -
 
+gitclone=git clone --single-branch --depth 1 --branch $(1) $(3) $(2)
+
 .PHONY: download-manual
  download-manual:
-	git clone --single-branch --depth 1 \
-		git://git.kernel.org/pub/scm/docs/man-pages/man-pages.git build/man-src
+	$(call gitclone,master,build/man-src,git://git.kernel.org/pub/scm/docs/man-pages/man-pages.git)
 	$(MAKE) -C build/man-src -j install prefix=../manual
 	rm -r build/man-src
 
 .PHONY: download-jemalloc
 download-jemalloc:
-	@#git clone doesn't have ./configure script, requires autoconf
-	@#git clone --depth 1 --single-branch --branch master \
-	@#	https://github.com/jemalloc/jemalloc.git build/jemalloc
+#git clone doesn't have ./configure script, requires autoconf
+#git clone --depth 1 --single-branch --branch master \
+#	https://github.com/jemalloc/jemalloc.git build/jemalloc
 	curl -L -s https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2 | \
 		tar --bzip2 --extract --directory build --file=-
 
-#Create a backup point of the current .configls
+.PHONY: download-musl
+download-musl:
+	$(call gitclone,master,build/musl-src,git://git.musl-libc.org/musl)
+
+.PHONY: build-musl
+build-musl:
+	(cd build/musl-src; CC=gcc ./configure --disable-shared --prefix=$(abspath build/musl))
+	$(MAKE) -C build/musl-src install
+
+.PHONY: download-kmod
+download-kmod:
+#git clone --depth 1 --single-branch --branch master git://git.kernel.org/pub/scm/utils/kernel/kmod/kmod.git build/kmod-src
+	curl https://mirrors.edge.kernel.org/pub/linux/utils/kernel/kmod/kmod-29.tar.xz | \
+		tar --extract --xz --directory build -f -
+
+.PHONY: build-kmod
+build-kmod:	
+#(cd build/kmod-29; ./configure CC=$(abspath build/musl/bin/musl-gcc) CFLAGS="-Os -nostdlib \
+#	-I $(abspath build/musl/include) $(abspath build/musl/lib/libc.a)" --prefix=$(abspath build/kmod))
+	(cd build/kmod-29; ./configure CC=$(abspath build/musl/bin/musl-gcc) CFLAGS="-Os -I $(abspath build/musl/include)" --enable-static --prefix=$(abspath build/kmod) --disable-tools --with-zstd)
+	$(MAKE) -C build/kmod-29 install
+
+.PHONY: download-zstd
+download-zstd:
+	$(call gitclone,dev,build/zstd-src,https://github.com/facebook/zstd.git)
+
+.PHONY: build-zstd
+build-zstd:
+	$(shell $(MAKE) -C build/zstd-src/lib CC=$(abspath build/musl/bin/musl-gcc) \
+		ZSTD_NO_UNUSED_FUNCTIONS=0 ZSTD_LIB_MINIFY=1 \
+		ZSTD_LEGACY_SUPPORT=0 ZSTD_LIB_COMPRESSION=0 ZSTD_LIB_DEPRECATED=0 \
+		PREFIX=$(abspath build/zstd) install)
+
+#Create a backup point of the current .config
 .PHONY: backup-config
 backup-config: dirs
 	$(call copy-config,records,backup)
@@ -159,7 +193,7 @@ save-new-config:
 #Diff the current git tracked kernel.config with the one used by linux build targets
 .PHONY: diff-config
 diff-config:
-	@diff --color --speed-large-files -s kernel.config $(LINUX_SRC_DIR)/.config
+	@diff --color=always --speed-large-files -s kernel.config $(LINUX_SRC_DIR)/.config | less -r --quit-if-one-screen --quit-at-eof
 	
 .PHONY: use-saved-config
 use-saved-config:
