@@ -8,9 +8,11 @@ char * find_arg(char *);
 char * terminate_arg(char *);
 bool streq(const char *, const char *);
 void cat(uring_queue *, const char * );
-void run(uring_queue *, const char *);
+void run(uring_queue *, const char *, char *);
+void exec_prog(const char *, char *);
 
-void process_command(char * args, uring_queue * uring, int argc, char * argv[argc], char * envp[]) {
+void process_command(char * args, uring_queue * uring, int argc, 
+	char * argv[argc], char * envp[]) {
 	char * prog = find_arg(args);
 
 	if(prog == NULL) {
@@ -48,7 +50,7 @@ void process_command(char * args, uring_queue * uring, int argc, char * argv[arg
 			WRITESTR("No file path specified.\n");
 		} else {
 			char * next = terminate_arg(path);
-			run(uring, path);
+			run(uring, path, next);
 		}
 	} else if(streq(prog, "exit")) {
 		reboot_hard(LINUX_REBOOT_CMD_POWER_OFF);
@@ -59,43 +61,71 @@ void process_command(char * args, uring_queue * uring, int argc, char * argv[arg
 	}
 }
 
-void run(uring_queue *uring, const char * path) {
+void run(uring_queue *uring, const char * path, char * next) {
 	struct clone_args cl_args = {
 		.flags = CLONE_NEWNET | CLONE_NEWIPC | CLONE_NEWCGROUP |
-		 	CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUSER | CLONE_NEWUTS,
+		 	CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUSER | CLONE_NEWUTS |
+			CLONE_CLEAR_SIGHAND,
 		.exit_signal = SIGCHLD
 	};
 
-	pid_t tid = clone3(&cl_args, sizeof cl_args);
+	pid_t tid = clone3(&cl_args, sizeof(struct clone_args));
 
-	if(tid == 0) {
-		//use memfd_create to load file into memory first and exec from memory?
-		struct open_how how = {
-			.flags = O_PATH
-		};
+	uint32_t mutex = 0;
 
-		int fd = SYSCHECK(openat2(AT_FDCWD, path, &how, sizeof(struct open_how)));
-
-		int temp1 = SYSCHECK(open("/dev/console", 0, 0));
-
-		const char * args[] = {
-			path,
-			NULL
-		};
-
-		const char * const envp[] = {
-			NULL
-		};
-
-		int execres = execveat(fd, "", args, envp, AT_EMPTY_PATH);
-		WRITE_ERR("execveat returned ", execres);
-	} else if(tid > 0) {
+	if(tid > 0) {
 		WRITESTR("Forked process ");
 		write_int(tid);
 		WRITESTR("\n");
+	} else if(tid == 0) {
+		exec_prog(path, next);
 	} else {
 		WRITE_ERR("clone3 error", tid);
 	}
+}
+
+void exec_prog(const char * path, char * next) {
+	//use memfd_create to load file into memory first and exec from memory?
+	struct open_how how = {
+		.flags = O_PATH | O_CLOEXEC
+	};
+
+	int fd = SYSCHECK(openat2(AT_FDCWD, path, &how, sizeof(struct open_how)));
+
+	int stdout = SYSCHECK(open("/dev/console", O_APPEND | O_RDWR, 0));
+
+#if ARG_MAX <= 32
+#define MAX_ARGS ARG_MAX
+#else
+#define MAX_ARGS 32
+#endif
+
+	char * args[MAX_ARGS];
+
+	/* Fill in args */
+	args[0] = (char *)path;
+	size_t i = 1;
+	while(next != NULL && i < MAX_ARGS) {
+		char * temp = terminate_arg(next);
+		args[i] = next;
+		next = find_arg(temp);
+		i++;
+	}
+	if(i == MAX_ARGS) {
+		WRITESTR("Truncated to ");
+		write_int(MAX_ARGS);
+		WRITESTR(" args\n");
+	} else {
+		args[i] = NULL;
+	}
+
+	/* Empty environment */
+	char * envp[] = {
+		NULL
+	};
+
+	int execres = execveat(fd, "", args, envp, AT_EMPTY_PATH);
+	WRITE_ERR("execveat returned ", execres);
 }
 
 void cat(uring_queue *uring, const char * path) {
@@ -173,7 +203,7 @@ void dirlist(uring_queue *uring, const char * path) {
 
 /* Skip blanks to find the next arg, or NULL */
 char * find_arg(char * str) {
-	while(*str == ' '|| *str == '\t') {
+	while((*str == ' ') || (*str == '\t')) {
 		str++;
 	}
 	if(*str == '\0') {
@@ -184,7 +214,7 @@ char * find_arg(char * str) {
 
 /* Returns the rest of the string after thlse current arg, or NULL */
 char * terminate_arg(char * str) {
-	while(*str != ' ' && *str != '\t' && *str != '\0') {
+	while((*str != ' ') && (*str != '\t') && (*str != '\0')) {
 		str++;
 	}
 	if(*str == '\0') {

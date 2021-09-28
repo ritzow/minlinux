@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -Wextra -g -Werror \
+CFLAGS=-Wall -Wextra -Werror \
 	-Wno-unused-parameter -Wno-unused-variable \
 	-fno-asynchronous-unwind-tables \
 	-fno-ident -Os -nostdlib -static -lgcc \
@@ -10,7 +10,8 @@ CFLAGS=-Wall -Wextra -g -Werror \
 SHARED_HEADERS=syscall.h util.h
 
 init: uring_ctl.o init.c uring_ctl.h util.o command.o $(SHARED_HEADERS) command.h
-	$(CC) $(CFLAGS) -s init.c uring_ctl.o util.o command.o $(BUILD_DIR)/jemalloc-5.2.1/lib/libjemalloc_pic.a  -o init
+	$(CC) $(CFLAGS) -s init.c uring_ctl.o util.o command.o \
+	$(BUILD_DIR)/jemalloc-5.2.1/lib/libjemalloc_pic.a  -o init
 
 uring_ctl.o: uring_ctl.c uring_ctl.h $(SHARED_HEADERS)
 	$(CC) $(CFLAGS) -c uring_ctl.c -o uring_ctl.o

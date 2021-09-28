@@ -28,11 +28,11 @@ asm(
 	"lea 8(%rsi,%rdi,8),%rdx\n" // then a NULL then envp (third arg, %rdx)
 	"and $-16, %rsp\n"          // x86 ABI : esp must be 16-byte aligned when
 	"sub $8, %rsp\n"            // entering the callee
-	"call main\n"               // main() returns the status code, we'll exit with it.
-	"movzb %al, %rdi\n"         // retrieve exit code from 8 lower bits
-	"mov $60, %rax\n"           // NR_exit == 60
-	"syscall\n"                 // really exit
-	"hlt\n"                     // ensure it does not return
+	"call start\n"               // main() returns the status code, we'll exit with it.
+//	"movzb %al, %rdi\n"         // retrieve exit code from 8 lower bits
+//	"mov $60, %rax\n"           // NR_exit == 60
+//	"syscall\n"                 // really exit
+//	"hlt\n"                     // ensure it does not return
 );
 
 static sigset_t allsignals = ~((sigset_t)0); /* no signals currntly */
@@ -44,7 +44,8 @@ typedef enum {
 	EVENT_SIGNAL,
 } io_event;
 
-int main(int argc, char * argv[], char * envp[]) {
+__attribute__((noreturn))
+void start(int argc, char * argv[], char * envp[]) {
 	int con = SYSCHECK(open("/dev/console", O_APPEND | O_RDWR, 0));
 	SYSCHECK(dup3(con, 1, 0));
 	SYSCHECK(dup3(con, 2, 0));
@@ -113,7 +114,11 @@ void process_signal() {
 			/* See sigaction(2) for siginfo field meanings for SIGCHLD */
 			siginfo_t info;
 			SYSCHECK(waitid(P_PID, siginfo.ssi_pid, &info, WEXITED | WNOHANG, NULL));
-			WRITESTR("Child terminated\n");
+			WRITESTR("Child process ");
+			write_int(siginfo.ssi_pid);
+			WRITESTR(" exited with status ");
+			write_int(siginfo.ssi_status);
+			WRITESTR("\n");
 			break;
 		}
 		default:

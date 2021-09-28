@@ -64,6 +64,9 @@ Based on nolibc.h, located in the Linux source tree at tools/include/nolibc
 /* For struct rusage used by waitid */
 #include <linux/resource.h>
 
+/* For ARG_MAX */
+#include <linux/limits.h>
+
 /* For mmap, always this value on x86_64 */
 #define PAGE_SIZE 4096
 
@@ -115,6 +118,26 @@ typedef	signed int idtype_t;
 typedef signed int id_t;
 
 #include <linux/signal.h>
+
+/* For getdents64 */
+typedef enum {
+	DT_UNKNOWN	= 0,
+	DT_FIFO   	= 1,
+	DT_CHR    	= 2,
+	DT_DIR    	= 4,
+	DT_BLK    	= 6,
+	DT_REG    	= 8,
+	DT_LNK    	= 10,
+	DT_SOCK   	= 12
+} dirtype;
+
+struct linux_dirent64 {
+	ino64_t        d_ino;   	/* 64-bit inode number */
+	off64_t        d_off;   	/* 64-bit offset to next structure */
+	unsigned short d_reclen;	/* Size of this dirent */
+	unsigned char  d_type;  	/* File type */
+	char           d_name[];	/* Filename (null-terminated) */
+};
 
 #define my_syscall0(num)                                                      \
 ({                                                                            \
@@ -320,30 +343,13 @@ LOCAL int dup3(int oldfd, int newfd, int flags) {
 	return my_syscall3(__NR_dup3, oldfd, newfd, flags);
 }
 
-LOCAL int execveat(int dirfd, const char *filename, const char *const argv[], 
-		const char *const envp[], int flags) {
+//LOCAL int execveat(int dirfd, const char *filename, char *const argv[], 
+//		char *const envp[], int flags) {
+
+LOCAL int execveat(int dirfd, const char * filename, char * const argv[], 
+		char * const envp[], int flags) {
 	return my_syscall5(__NR_execveat, dirfd, filename, argv, envp, flags);
 }
-
-typedef enum {
-	DT_UNKNOWN= 0,
-	DT_FIFO   = 1,
-	DT_CHR    = 2,
-	DT_DIR    = 4,
-	DT_BLK    = 6,
-	DT_REG    = 8,
-	DT_LNK    =10,
-	DT_SOCK   =12
-} dirtype;
-
-/* TODO this might not have the correct layout for the system call */
-struct linux_dirent64 {
-	ino64_t        d_ino;    /* 64-bit inode number */
-	off64_t        d_off;    /* 64-bit offset to next structure */
-	unsigned short d_reclen; /* Size of this dirent */
-	unsigned char  d_type;   /* File type */
-	char           d_name[]; /* Filename (null-terminated) */
-};
 
 LOCAL int getdents64(int fd, struct linux_dirent64 *dirp, int count) {
 	return my_syscall3(__NR_getdents64, fd, dirp, count);

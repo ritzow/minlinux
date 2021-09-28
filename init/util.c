@@ -45,6 +45,7 @@ size_t nolibc_strlen(const char *str) {
 	for (len = 0; str[len]; len++);
 	return len;
 }
+
 char *strchr(const char *s, int c) {
 	while (*s) {
 		if (*s == (char)c)
