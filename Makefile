@@ -47,7 +47,12 @@ configure-kernel:
 .PHONY: run
 run: 
 	qemu-system-x86_64 -vga none -nographic -sandbox on \
-	-kernel $(KERNEL_BINARY_FILE) -append "console=ttyS0" -bios /usr/share/ovmf/OVMF.fd 
+	-kernel $(KERNEL_BINARY_FILE) -append "console=ttyS0"
+
+.PHONY: run-efi
+run-efi: 
+	qemu-system-x86_64 -vga none -nographic -sandbox on \
+	-kernel $(KERNEL_BINARY_FILE) -append "console=ttyS0" -bios /usr/share/ovmf/OVMF.fd
 
 .PHONY: buildrun
 buildrun: build
@@ -71,6 +76,7 @@ build: build-init
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage
 	echo "bzImage is located at" $(KERNEL_BINARY_FILE)
 
+# Generate lines in the cpio archive specification
 .PHONY: _gen-cpio-list
 .ONESHELL: 
 _gen-cpio-list:
@@ -112,11 +118,13 @@ build-kernel-initial:
 build-modules:
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 modules
 	$(MAKE) -C $(LINUX_SRC_DIR) INSTALL_MOD_PATH=../initramfs modules_install #INSTALL_MOD_STRIP=1 
-#TODO generate initramfs.conf with all modules and modprobe included
-#Bootconfig won't compile, missing symbol "ret"
-#$(MAKE) -C $(LINUX_SRC_DIR)/tools/bootconfig
-#Add boot config (alternative to kernal command line args)
-#tools/bootconfig/bootconfig -a $(KERNEL_CONFIG_FILE) $(INITRAMFS_FILE)
+
+.PHONY: build-bootconfig
+build-bootconfig:
+	$(MAKE) -C $(LINUX_SRC_DIR)/tools/bootconfig
+# TODO use provided scripts to incldue bootconfig in initramfs
+# https://wiki.gentoo.org/wiki/Custom_Initramfs
+# tools/bootconfig/bootconfig -a $(KERNEL_CONFIG_FILE) $(INITRAMFS_FILE)
 
 .PHONY: gen-key
 gen-key:
@@ -193,7 +201,8 @@ save-new-config:
 #Diff the current git tracked kernel.config with the one used by linux build targets
 .PHONY: diff-config
 diff-config:
-	@diff --color=always --speed-large-files -s kernel.config $(LINUX_SRC_DIR)/.config | less -r --quit-if-one-screen --quit-at-eof
+	@diff --color=always --speed-large-files \
+		-s kernel.config $(LINUX_SRC_DIR)/.config | less -r --quit-if-one-screen --quit-at-eof
 	
 .PHONY: use-saved-config
 use-saved-config:
