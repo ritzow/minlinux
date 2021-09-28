@@ -1,20 +1,21 @@
 # Single-File No-disk, No-libc Linux
 
 This is a set of Makefile helper targets, a Linux kernel config, and a small 
-init program which preoduce a Linux bzImage file which can run directly as an 
+init program which produce a Linux bzImage file which can run directly as an 
 EFI application without interaction with persistent storage (probably via PXE 
 boot). The kernel config is 
 very specific and doesn't target a broad range of hardware. It doesn't include 
 all the proper drivers or other robust system support. This could serve as a base 
 for a node in a server cluster started using a custom orchestration system, 
-somewhat similar to running Fedora CoreOS as a simplified Kubernetes node.
+somewhat similar to running Fedora CoreOS as a simplified Kubernetes node. At
+least that's the idea.
 
-Directory sl-src contains the source code for a simple init program that has
-no library requirements other than the sanitized kernel headers. 
+The /init directory contains the source code for a simple static init program 
+that only depends on the sanitized kernel headers. 
 It uses code snippets from the Linux source
 tree at tools/include/nolibc/nolibc.h, for using system calls and some other
 libc-like functions. The init program also uses io_uring, currently for a simple
-echo program, based on example code from liburing's io_uring(7) manual page.
+echo program, based on liburing code.
 
 ## Usage
 
@@ -37,5 +38,5 @@ boot.conf is not currently used because bootconfig doesn't seem to compile,
 but this would otherwise be used to specify extra kernel arguments and bake them
 into bzImage in an efficient way.
 
-A Makefile target 'run' using qemu-system-x86_64 is provided to test the kernel 
-from a terminal.
+Makefile targets 'run' and 'run-efi' use qemu-system-x86_64 to provided a way
+to run the kernel from a terminal.
