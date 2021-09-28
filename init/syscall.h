@@ -25,24 +25,55 @@ Based on nolibc.h, located in the Linux source tree at tools/include/nolibc
 #ifndef __SYSCALL_H__
 #define __SYSCALL_H__
 
+/* For system call numbers */
 #include <linux/unistd.h>
+
+/* For mmap system calls */
 #include <linux/mman.h>
+
+/* For fcntl? */
 #include <linux/fcntl.h>
+
+/* For reboot system call enum */
 #include <linux/reboot.h>
+
+/* For io_uring system calls */
 #include <linux/io_uring.h>
+
+/* For clock_gettime */
 #include <linux/time.h>
+
+/* For clone3 and other scheduling related things */
 #include <linux/sched.h>
+
+/* For futex system call */
 #include <linux/futex.h>
 
+/* For openat2 system call */
+#include <linux/openat2.h>
 
+/* For system call error values, negated */
+#include <linux/errno.h>
+
+/* For signalfd system call */
+#include <linux/signalfd.h>
+
+/* For waitid */
+#include <linux/wait.h>
+
+/* For struct rusage used by waitid */
+#include <linux/resource.h>
+
+/* For mmap, always this value on x86_64 */
 #define PAGE_SIZE 4096
 
+/* Standard type and constant definitions */
 #define NULL ((void*)0)
 
-typedef int bool;
+typedef enum {false = 0, true = 1} bool;
 
-#define true ((bool)1)
-#define false ((bool)0)
+//#define true ((bool)1)
+//#define false ((bool)0)
 
 /* stdint types */
 typedef unsigned char       uint8_t;
@@ -62,6 +93,7 @@ typedef   signed long     ptrdiff_t;
 typedef unsigned long long uintmax_t;
 typedef signed   long long intmax_t;
 
+/* For clock_gettime */
 typedef int clockid_t;
 
 typedef unsigned int          dev_t;
@@ -77,6 +109,10 @@ typedef   signed long long	off64_t;
 typedef   signed long     blksize_t;
 typedef   signed long      blkcnt_t;
 typedef   signed long        time_t;
+
+/* For waitid */
+typedef	signed int idtype_t;
+typedef signed int id_t;
 
 #include <linux/signal.h>
 
@@ -205,41 +241,35 @@ typedef   signed long        time_t;
 	_ret;                                                                 \
 })
 
-#define LOCAL static inline //__attribute__((visibility("protected")))
+#define LOCAL static inline
  
-LOCAL ssize_t write(int fd, const void *buf, size_t count)
-{
+LOCAL ssize_t write(int fd, const void *buf, size_t count) {
 	return my_syscall3(__NR_write, fd, buf, count);
 }
 
-LOCAL ssize_t read(int fd, void *buf, size_t count)
-{
+LOCAL ssize_t read(int fd, void *buf, size_t count) {
 	return my_syscall3(__NR_read, fd, buf, count);
 }
 
-LOCAL ssize_t reboot(int cmd, void * arg)
-{
+LOCAL ssize_t reboot(int cmd, void * arg) {
 	return my_syscall4(__NR_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, cmd, arg);
 }
 
-LOCAL __attribute__((noreturn)) void reboot_hard(int cmd)
-{
+LOCAL __attribute__((noreturn))
+void reboot_hard(int cmd) {
 	my_syscall4(__NR_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, cmd, NULL);
-	while(1);
+	__builtin_unreachable();
 }
 
-LOCAL int sched_yield(void)
-{
+LOCAL int sched_yield(void) {
 	return my_syscall0(__NR_sched_yield);
 }
 
-LOCAL off_t lseek(int fd, off_t offset, int whence)
-{
+LOCAL off_t lseek(int fd, off_t offset, int whence) {
 	return my_syscall3(__NR_lseek, fd, offset, whence);
 }
 
-LOCAL int mkdir(const char *path, mode_t mode)
-{
+LOCAL int mkdir(const char *path, mode_t mode) {
 	return my_syscall3(__NR_mkdirat, AT_FDCWD, path, mode);
 }
 
@@ -248,8 +278,7 @@ LOCAL long mknod(const char *path, mode_t mode, dev_t dev) {
 }
 
 LOCAL int mount(const char *src, const char *tgt, const char *fst,
-	      unsigned long flags, const void *data)
-{
+	      unsigned long flags, const void *data) {
 	return my_syscall5(__NR_mount, src, tgt, fst, flags, data);
 }
 
@@ -257,15 +286,14 @@ LOCAL int open(const char *path, int flags, mode_t mode) {
 	return my_syscall4(__NR_openat, AT_FDCWD, path, flags, mode);
 }
 
-LOCAL void * brk(void *addr)
-{
+LOCAL void * brk(void *addr) {
 	return (void *)my_syscall1(__NR_brk, addr);
 }
 
 LOCAL __attribute__((noreturn)) 
 void exit(int status) {
 	my_syscall1(__NR_exit, status & 255);
-	while(1); // shut the "noreturn" warnings.
+	__builtin_unreachable();
 }
 
 LOCAL int chdir(const char *path) {
@@ -288,12 +316,13 @@ LOCAL int close(int fd) {
 	return my_syscall1(__NR_close, fd);
 }
 
-LOCAL int dup3(int old, int new, int flags) {
-	return my_syscall3(__NR_dup3, old, new, flags);
+LOCAL int dup3(int oldfd, int newfd, int flags) {
+	return my_syscall3(__NR_dup3, oldfd, newfd, flags);
 }
 
-LOCAL int execve(const char *filename, char *const argv[], char *const envp[]) {
-	return my_syscall3(__NR_execve, filename, argv, envp);
+LOCAL int execveat(int dirfd, const char *filename, const char *const argv[], 
+		const char *const envp[], int flags) {
+	return my_syscall5(__NR_execveat, dirfd, filename, argv, envp, flags);
 }
 
 typedef enum {
@@ -319,9 +348,11 @@ struct linux_dirent64 {
 LOCAL int getdents64(int fd, struct linux_dirent64 *dirp, int count) {
 	return my_syscall3(__NR_getdents64, fd, dirp, count);
 }
+
 LOCAL pid_t getpid(void) {
 	return my_syscall0(__NR_getpid);
 }
+
 LOCAL int ioctl(int fd, unsigned long req, void *value) {
 	return my_syscall3(__NR_ioctl, fd, req, value);
 }
@@ -358,7 +389,7 @@ LOCAL int io_uring_register(unsigned int fd, unsigned int opcode, void *arg,
 	return my_syscall4(__NR_io_uring_register, fd, opcode, arg, nr_args);
 }
 
-LOCAL long clone3(struct clone_args *cl_args, size_t size) {
+LOCAL pid_t clone3(struct clone_args *cl_args, size_t size) {
 	return my_syscall2(__NR_clone3, cl_args, size);
 }
 
@@ -373,8 +404,22 @@ LOCAL long futex(uint32_t *uaddr, int futex_op, uint32_t val,
 	return my_syscall6(__NR_futex, uaddr, futex_op, val, timeout, uaddr2, val3);
 }
 
-// LOCAL int fsopen(const char * fsname, unsigned int flags) {
+LOCAL int openat2(int dirfd, const char *pathname, 
+					struct open_how *how, size_t size) {
+	return my_syscall4(__NR_openat2, dirfd, pathname, how, size);
+}
 
-// }
+LOCAL int signalfd(int fd, const sigset_t *mask, int flags) {
+	return my_syscall4(__NR_signalfd4, fd, mask, sizeof(sigset_t), flags);
+}
+
+LOCAL int sigprocmask(int how, const sigset_t *set, sigset_t *oldset, size_t sigsetsize) {
+	return my_syscall4(__NR_rt_sigprocmask, how, set, oldset, sigsetsize);
+}
+
+LOCAL int waitid(idtype_t idtype, id_t id, siginfo_t *infop, int options, 
+	struct rusage * usage) {
+	return my_syscall5(__NR_waitid, idtype, id, infop, options, usage);
+}
 
 #endif

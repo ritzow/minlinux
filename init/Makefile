@@ -1,6 +1,9 @@
 CC=gcc
-CFLAGS=-Wall -g -Werror -Wno-unused-variable -fno-asynchronous-unwind-tables \
-	-fno-ident -Os -nostdlib -static -lgcc -I $(BUILD_DIR)/include \
+CFLAGS=-Wall -Wextra -g -Werror \
+	-Wno-unused-parameter -Wno-unused-variable \
+	-fno-asynchronous-unwind-tables \
+	-fno-ident -Os -nostdlib -static -lgcc \
+	-I $(BUILD_DIR)/include \
 	-march=x86-64
 #-march=x86-64-v3
 

@@ -36,9 +36,16 @@ typedef struct {
 	res;\
 })
 
+#define WRITE_ERR(str, err) ({\
+	WRITESTR(str);\
+	WRITESTR(": ");\
+	write_int(err);\
+	WRITESTR("\n");\
+})
+
 #define ERREXIT(msg) ({\
 	WRITESTR(__FILE__ ":" xstr(__LINE__) " " msg);\
-	exit(1);\
+	reboot_hard(LINUX_REBOOT_CMD_POWER_OFF);\
 })
 
 void *memmove(void *dst, const void *src, size_t len);

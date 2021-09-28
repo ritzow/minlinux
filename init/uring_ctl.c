@@ -68,34 +68,25 @@ uring_queue uring_init(uint32_t size) {
 	return uring;
 }
 
-/*
-* Read from completion queue.
-* In this function, we read completion events from the completion queue.
-* We dequeue the CQE, update and head and return the result of the operation.
-* */
-cqe uring_result(uring_queue* uring) {
+struct io_uring_cqe * uring_result(uring_queue* uring) {
 	/* Read barrier */
 	uint32_t head = __atomic_load_n(uring->cq_head, __ATOMIC_ACQUIRE);
 
 	/* If head == tail, the buffer is empty. */
 	if (head == *uring->cq_tail) {
-		return (cqe) {
-			.success = false
-		};
+		return NULL;
 	}
 
-	/* Get the entry */
-	struct io_uring_cqe res = uring->cqes[head & *uring->cq_mask];
-
-	/* Write barrier so that update to the head are made visible */
-	__atomic_store_n(uring->cq_head, head + 1, __ATOMIC_RELEASE);
-	return (cqe) {
-		.entry = res,
-		.success = true
-	};
+	return &uring->cqes[head & *uring->cq_mask];
 }
 
-/* From liburing io_uring_get_sqe */
+void uring_advance(uring_queue *uring) {
+	uint32_t head = __atomic_load_n(uring->cq_head, __ATOMIC_ACQUIRE);
+	/* Write barrier so that update to the head are made visible */
+	__atomic_store_n(uring->cq_head, head + 1, __ATOMIC_RELEASE);
+}
+
+/* From liburing io_uring_get_sqe, for non-polling only */
 struct io_uring_sqe *uring_new_submission(uring_queue * uring) {
 	uint32_t head = __atomic_load_n(uring->sq_head, __ATOMIC_ACQUIRE);
 	uint32_t next = uring->sq_list_tail + 1;
@@ -145,26 +136,6 @@ void uring_wait(uring_queue * uring, uint32_t count) {
 	uint32_t submitted = sq_tail - *uring->sq_head;
 
 	SYSCHECK(io_uring_enter(uring->ringfd, submitted, count, IORING_ENTER_GETEVENTS, NULL));
-}
-
-void uring_submit_read(uring_queue * uring, int fd, void * dst, size_t count) {
-	struct io_uring_sqe * sqe = uring_new_submission(uring);
-	sqe->opcode = IORING_OP_READ;
-	sqe->fd = fd;
-	sqe->addr = (uintptr_t)dst;
-	sqe->len = count;
-	sqe->flags = 0;
-	sqe->ioprio = 0;
-}
-
-void uring_submit_write_linked(uring_queue * uring, int fd, void * src, size_t count) {
-	struct io_uring_sqe * sqe = uring_new_submission(uring);
-	sqe->opcode = IORING_OP_WRITE;
-	sqe->fd = fd;
-	sqe->addr = (uintptr_t)src;
-	sqe->len = count;
-	sqe->flags = IOSQE_IO_LINK;
-	sqe->ioprio = 0;
 }
 
 void uring_close(uring_queue * uring) {

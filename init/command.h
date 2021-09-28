@@ -3,6 +3,6 @@
 
 #include "uring_ctl.h"
 
-void process_command(char *, uring_queue *, char * envp[]);
+void process_command(char *, uring_queue *, int argc, char * argv[argc], char * envp[]);
 
 #endif

@@ -7,8 +7,10 @@ void dirlist(uring_queue *, const char *);
 char * find_arg(char *);
 char * terminate_arg(char *);
 bool streq(const char *, const char *);
+void cat(uring_queue *, const char * );
+void run(uring_queue *, const char *);
 
-void process_command(char * args, uring_queue * uring, char * envp[]) {
+void process_command(char * args, uring_queue * uring, int argc, char * argv[argc], char * envp[]) {
 	char * prog = find_arg(args);
 
 	if(prog == NULL) {
@@ -28,22 +30,100 @@ void process_command(char * args, uring_queue * uring, char * envp[]) {
 	} else if(streq(prog, "ps")) {
 		WRITESTR("ps not implemented\n");
 	} else if(streq(prog, "cat")) {
-		WRITESTR("cat not implemented\n");
+		char * path = find_arg(next);
+		if(path == NULL) {
+			WRITESTR("No file path specified.\n");
+		} else {
+			char * next = terminate_arg(path);
+			cat(uring, path);
+		}
 	} else if(streq(prog, "env")) {
 		for(size_t i = 0; envp[i] != NULL; i++) {
 			WRITESTR(envp[i]);
 			WRITESTR("\n");
 		}
+	} else if(streq(prog, "run")) {
+		char * path = find_arg(next);
+		if(path == NULL) {
+			WRITESTR("No file path specified.\n");
+		} else {
+			char * next = terminate_arg(path);
+			run(uring, path);
+		}
 	} else if(streq(prog, "exit")) {
 		reboot_hard(LINUX_REBOOT_CMD_POWER_OFF);
 	} else {
-		WRITESTR("Unknown command\n");
+		WRITESTR("Unknown command \"");
+		WRITESTR(prog);
+		WRITESTR("\"\n");
+	}
+}
+
+void run(uring_queue *uring, const char * path) {
+	struct clone_args cl_args = {
+		.flags = CLONE_NEWNET | CLONE_NEWIPC | CLONE_NEWCGROUP |
+		 	CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUSER | CLONE_NEWUTS,
+		.exit_signal = SIGCHLD
+	};
+
+	pid_t tid = clone3(&cl_args, sizeof cl_args);
+
+	if(tid == 0) {
+		//use memfd_create to load file into memory first and exec from memory?
+		struct open_how how = {
+			.flags = O_PATH
+		};
+
+		int fd = SYSCHECK(openat2(AT_FDCWD, path, &how, sizeof(struct open_how)));
+
+		int temp1 = SYSCHECK(open("/dev/console", 0, 0));
+
+		const char * args[] = {
+			path,
+			NULL
+		};
+
+		const char * const envp[] = {
+			NULL
+		};
+
+		int execres = execveat(fd, "", args, envp, AT_EMPTY_PATH);
+		WRITE_ERR("execveat returned ", execres);
+	} else if(tid > 0) {
+		WRITESTR("Forked process ");
+		write_int(tid);
+		WRITESTR("\n");
+	} else {
+		WRITE_ERR("clone3 error", tid);
+	}
+}
+
+void cat(uring_queue *uring, const char * path) {
+	struct open_how how = {
+		.flags = O_RDONLY | O_NOATIME
+	};
+	int fd = openat2(AT_FDCWD, path, &how, sizeof(struct open_how));
+	if(fd < 0) {
+		WRITE_ERR("Couldn't open file", fd);
+		return;
+	}
+	char buffer[1024];
+	int result;
+	while((result = read(fd, buffer, sizeof buffer)) > 0) {
+		int wrresult;
+		if((wrresult = write(0, buffer, result)) < 0) {
+			WRITE_ERR("Error writing to stdout", wrresult);
+		}
+	}
+
+	if(result < 0) {
+		WRITE_ERR("Error reading file", result);
 	}
 }
 
 void dirlist(uring_queue *uring, const char * path) {
 	/* TODO use uring openat2 */
-	int rootdir = open(path, O_RDONLY | O_DIRECTORY, 0);
+	int rootdir = open(path, O_RDONLY | O_NOATIME | O_DIRECTORY, 0);
 	if(rootdir < 0) {
 		WRITESTR("Error opening directory ");
 		WRITESTR(path);
@@ -67,10 +147,20 @@ void dirlist(uring_queue *uring, const char * path) {
 					WRITESTR("\n");
 					break;
 				case DT_FIFO:
+					WRITESTR(" (fifo)\n");
+					break;
 				case DT_CHR:
+					WRITESTR(" (character)\n");
+					break;
 				case DT_BLK:
+					WRITESTR(" (block)\n");
+					break;
 				case DT_LNK:
+					WRITESTR(" -> ???\n");
+					break;
 				case DT_SOCK:
+					WRITESTR(" (socket)\n");
+					break;
 				case DT_UNKNOWN:
 				default:
 					WRITESTR("?\n");
