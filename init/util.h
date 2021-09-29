@@ -48,6 +48,8 @@ typedef struct {
 	reboot_hard(LINUX_REBOOT_CMD_POWER_OFF);\
 })
 
+#define ARRAY_LENGTH(a) (sizeof(a) / sizeof(*a))
+
 void *memmove(void *dst, const void *src, size_t len);
 void *memcpy(void *dst, const void *src, size_t len);
 void *memset(void *dst, int b, size_t len);

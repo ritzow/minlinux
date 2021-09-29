@@ -428,4 +428,8 @@ LOCAL int waitid(idtype_t idtype, id_t id, siginfo_t *infop, int options,
 	return my_syscall5(__NR_waitid, idtype, id, infop, options, usage);
 }
 
+LOCAL int pivot_root(const char * new_root, const char * put_old) {
+	return my_syscall2(__NR_pivot_root, new_root, put_old);
+}
+
 #endif

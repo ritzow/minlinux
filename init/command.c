@@ -3,13 +3,36 @@
 #include "uring_ctl.h"
 #include "command.h"
 
+#define CMD_PROTO(name) void name(uring_queue * uring, int argc, \
+	char * argv[argc], char * envp[], char * next)
+
 void dirlist(uring_queue *, const char *);
 char * find_arg(char *);
 char * terminate_arg(char *);
 bool streq(const char *, const char *);
-void cat(uring_queue *, const char * );
 void run(uring_queue *, const char *, char *);
 void exec_prog(const char *, char *);
+void print_time(void);
+
+CMD_PROTO(cmd_time);
+CMD_PROTO(cmd_ls);
+CMD_PROTO(cmd_cat);
+CMD_PROTO(cmd_run);
+CMD_PROTO(cmd_env);
+CMD_PROTO(cmd_exit);
+
+struct {
+	char * name;
+	void (*func)(uring_queue *uring, int argc, 
+		char * argv[argc], char * envp[], char * next);
+} builtins[] = {
+	{"time", cmd_time},
+	{"ls", cmd_ls},
+	{"cat", cmd_cat},
+	{"run", cmd_run},
+	{"env", cmd_env},
+	{"exit", cmd_exit}
+};
 
 void process_command(char * args, uring_queue * uring, int argc, 
 	char * argv[argc], char * envp[]) {
@@ -21,67 +44,103 @@ void process_command(char * args, uring_queue * uring, int argc,
 
 	char * next = terminate_arg(prog);
 
-	if(streq(prog, "ls")) {
-		char * dir = find_arg(next);
-		if(dir == NULL) {
-			dirlist(uring, "/");
-		} else {
-			char * next = terminate_arg(dir);
-			dirlist(uring, dir);
+	for(size_t i = 0; i < ARRAY_LENGTH(builtins); i++) {
+		if(streq(prog, builtins[i].name)) {
+			builtins[i].func(uring, argc, argv, envp, next);
+			return;
 		}
-	} else if(streq(prog, "ps")) {
-		WRITESTR("ps not implemented\n");
-	} else if(streq(prog, "cat")) {
-		char * path = find_arg(next);
-		if(path == NULL) {
-			WRITESTR("No file path specified.\n");
-		} else {
-			char * next = terminate_arg(path);
-			cat(uring, path);
-		}
-	} else if(streq(prog, "env")) {
-		for(size_t i = 0; envp[i] != NULL; i++) {
-			WRITESTR(envp[i]);
-			WRITESTR("\n");
-		}
-	} else if(streq(prog, "run")) {
-		char * path = find_arg(next);
-		if(path == NULL) {
-			WRITESTR("No file path specified.\n");
-		} else {
-			char * next = terminate_arg(path);
-			run(uring, path, next);
-		}
-	} else if(streq(prog, "exit")) {
-		reboot_hard(LINUX_REBOOT_CMD_POWER_OFF);
+	}
+
+	WRITESTR("Unknown command \"");
+	WRITESTR(prog);
+	WRITESTR("\"\n");
+}
+
+CMD_PROTO(cmd_time) {
+	struct timespec time;
+	SYSCHECK(clock_gettime(CLOCK_REALTIME, &time));
+
+	WRITESTR("Current Time: ");
+	write_int(time.tv_sec);
+	WRITESTR(" sec ");
+	write_int(time.tv_nsec);
+	WRITESTR(" nsec\n");
+}
+
+CMD_PROTO(cmd_ls) {
+	char * dir = find_arg(next);
+	if(dir == NULL) {
+		dirlist(uring, "/");
 	} else {
-		WRITESTR("Unknown command \"");
-		WRITESTR(prog);
-		WRITESTR("\"\n");
+		char * next = terminate_arg(dir);
+		dirlist(uring, dir);
 	}
 }
 
-void run(uring_queue *uring, const char * path, char * next) {
-	struct clone_args cl_args = {
-		.flags = CLONE_NEWNET | CLONE_NEWIPC | CLONE_NEWCGROUP |
-		 	CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUSER | CLONE_NEWUTS |
-			CLONE_CLEAR_SIGHAND,
-		.exit_signal = SIGCHLD
-	};
-
-	pid_t tid = clone3(&cl_args, sizeof(struct clone_args));
-
-	uint32_t mutex = 0;
-
-	if(tid > 0) {
-		WRITESTR("Forked process ");
-		write_int(tid);
-		WRITESTR("\n");
-	} else if(tid == 0) {
-		exec_prog(path, next);
+CMD_PROTO(cmd_cat) {
+	char * path = find_arg(next);
+	if(path == NULL) {
+		WRITESTR("No file path specified.\n");
 	} else {
-		WRITE_ERR("clone3 error", tid);
+		char * next = terminate_arg(path);
+		struct open_how how = {
+			.flags = O_RDONLY | O_NOATIME
+		};
+		int fd = openat2(AT_FDCWD, path, &how, sizeof(struct open_how));
+		if(fd < 0) {
+			WRITE_ERR("Couldn't open file", fd);
+			return;
+		}
+		char buffer[1024];
+		int result;
+		while((result = read(fd, buffer, sizeof buffer)) > 0) {
+			int wrresult;
+			if((wrresult = write(0, buffer, result)) < 0) {
+				WRITE_ERR("Error writing to stdout", wrresult);
+			}
+		}
+
+		if(result < 0) {
+			WRITE_ERR("Error reading file", result);
+		}
 	}
+}
+
+CMD_PROTO(cmd_run) {
+	char * path = find_arg(next);
+	if(path == NULL) {
+		WRITESTR("No file path specified.\n");
+	} else {
+		char * next = terminate_arg(path);
+		struct clone_args cl_args = {
+			.flags = CLONE_NEWNET | CLONE_NEWIPC | CLONE_NEWCGROUP |
+				CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUSER | CLONE_NEWUTS |
+				CLONE_CLEAR_SIGHAND,
+			.exit_signal = SIGCHLD
+		};
+		pid_t tid = clone3(&cl_args, sizeof(struct clone_args));
+		uint32_t mutex = 0;
+		if(tid > 0) {
+			WRITESTR("Forked process ");
+			write_int(tid);
+			WRITESTR("\n");
+		} else if(tid == 0) {
+			exec_prog(path, next);
+		} else {
+			WRITE_ERR("clone3 error", tid);
+		}
+	}
+}
+
+CMD_PROTO(cmd_env) {
+	for(size_t i = 0; envp[i] != NULL; i++) {
+		WRITESTR(envp[i]);
+		WRITESTR("\n");
+	}
+}
+
+CMD_PROTO(cmd_exit) {
+	reboot_hard(LINUX_REBOOT_CMD_POWER_OFF);
 }
 
 void exec_prog(const char * path, char * next) {
@@ -124,31 +183,13 @@ void exec_prog(const char * path, char * next) {
 		NULL
 	};
 
+	//https://tejom.github.io/c/linux/containers/docker/2016/10/04/containers-from-scratch-pt1.html
+	//https://news.ycombinator.com/item?id=23167383
+	//https://www.kernel.org/doc/Documentation/filesystems/ramfs-rootfs-initramfs.txt
+	//chroot/pivot_root?
+
 	int execres = execveat(fd, "", args, envp, AT_EMPTY_PATH);
 	WRITE_ERR("execveat returned ", execres);
-}
-
-void cat(uring_queue *uring, const char * path) {
-	struct open_how how = {
-		.flags = O_RDONLY | O_NOATIME
-	};
-	int fd = openat2(AT_FDCWD, path, &how, sizeof(struct open_how));
-	if(fd < 0) {
-		WRITE_ERR("Couldn't open file", fd);
-		return;
-	}
-	char buffer[1024];
-	int result;
-	while((result = read(fd, buffer, sizeof buffer)) > 0) {
-		int wrresult;
-		if((wrresult = write(0, buffer, result)) < 0) {
-			WRITE_ERR("Error writing to stdout", wrresult);
-		}
-	}
-
-	if(result < 0) {
-		WRITE_ERR("Error reading file", result);
-	}
 }
 
 void dirlist(uring_queue *uring, const char * path) {

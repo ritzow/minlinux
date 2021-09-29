@@ -50,15 +50,6 @@ void start(int argc, char * argv[], char * envp[]) {
 	SYSCHECK(dup3(con, 1, 0));
 	SYSCHECK(dup3(con, 2, 0));
 
-	/*struct timespec time;
-	SYSCHECK(clock_gettime(CLOCK_BOOTTIME, &time));
-
-	WRITESTR("Boot to init took ");
-	write_int(time.tv_sec);
-	WRITESTR(" sec ");
-	write_int(time.tv_nsec);
-	WRITESTR(" nsec\n");*/
-
 	SYSCHECK(mount(NULL, "/proc", "proc", MS_NOEXEC | MS_RDONLY, NULL));
 	SYSCHECK(mount(NULL, "/sys", "sysfs", MS_NOEXEC | MS_RDONLY, NULL));
 
