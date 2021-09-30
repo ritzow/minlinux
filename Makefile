@@ -67,6 +67,7 @@ build-all:
 	$(MAKE) build-kernel-initial
 	$(MAKE) build-modules
 	$(MAKE) use-saved-config
+	$(MAKE) install-kernel-headers
 	$(MAKE) build
 
 .PHONY: build
@@ -95,7 +96,8 @@ install-kernel-headers:
 	cp -r $(LINUX_SRC_DIR)/tools/include/nolibc build/include
 
 .PHONY: build-init
-build-init: install-kernel-headers
+build-init:
+	$(MAKE) -C minlinux
 	$(MAKE) -C init MUSL_DIR=$(abspath build/musl) BUILD_DIR="$(abspath build)" init
 
 .PHONY: apt-install-kernel-reqs

@@ -7,14 +7,15 @@
 /* for struct iovec */
 #include <linux/uio.h>
 
-void uring_submit_read(uring_queue *, int, void *, size_t);
-void uring_submit_write_linked(uring_queue *, int, void *, size_t);
+#define STDIN 0
+#define STDOUT 1
+#define STDERR 2
 
 void init(uring_queue *);
 void handle(uring_queue *, struct io_uring_cqe *, int argc, char * argv[argc], char * envp[]);
 void process_input(uring_queue *, struct io_uring_cqe *, int argc, char * argv[argc], 
 	char * envp[]);
-void submit_prompt(uring_queue *);
+void create_console_prompt(uring_queue *);
 void submit_sig_listen(uring_queue *);
 void process_signal(void);
 
@@ -29,20 +30,15 @@ asm(
 	"and $-16, %rsp\n"          // x86 ABI : esp must be 16-byte aligned when
 	"sub $8, %rsp\n"            // entering the callee
 	"call start\n"               // main() returns the status code, we'll exit with it.
-//	"movzb %al, %rdi\n"         // retrieve exit code from 8 lower bits
-//	"mov $60, %rax\n"           // NR_exit == 60
-//	"syscall\n"                 // really exit
-//	"hlt\n"                     // ensure it does not return
 );
 
-static sigset_t allsignals = ~((sigset_t)0); /* no signals currntly */
+static sigset_t allsignals = ~((sigset_t)1); /* no signals currntly */
 
-typedef enum {
+enum {
 	EVENT_CONSOLE_READ,
-	//EVENT_WRITE,
-	EVENT_OTHER,
 	EVENT_SIGNAL,
-} io_event;
+	EVENT_OTHER
+};
 
 __attribute__((noreturn))
 void start(int argc, char * argv[], char * envp[]) {
@@ -79,7 +75,7 @@ int sigfd;
 
 void init(uring_queue *uring) {
 	sigfd = SYSCHECK(signalfd(-1, &allsignals, 0));
-	submit_prompt(uring);
+	create_console_prompt(uring);
 	submit_sig_listen(uring);
 }
 
@@ -112,6 +108,14 @@ void process_signal() {
 			WRITESTR("\n");
 			break;
 		}
+		case SIGILL:
+		case SIGINT:
+		case SIGQUIT:
+		case SIGTERM:
+		case SIGSEGV:
+			WRITESTR("Received signal, powering off\n");
+			reboot_hard(LINUX_REBOOT_CMD_POWER_OFF);
+			break;
 		default:
 			WRITESTR("Received signal number ");
 			write_int(siginfo.ssi_signo);
@@ -131,7 +135,7 @@ void process_input(uring_queue *uring, struct io_uring_cqe *cqe,
 			buffer[last_index] = '\0';
 			process_command(buffer, uring, argc, argv, envp);
 		}
-		submit_prompt(uring);
+		create_console_prompt(uring);
 	} else if(cqe->res == 0) {
 		/* reached EOF */
 		ERREXIT("End of console input.\n");
@@ -151,29 +155,22 @@ void submit_sig_listen(uring_queue *uring) {
 	sqe->user_data = EVENT_SIGNAL;
 }
 
-void submit_prompt(uring_queue *uring) {
-	uring_submit_write_linked(uring, 1, "Command: ", strlen("Command: "));
-	uring_submit_read(uring, 1, buffer, sizeof buffer);
-}
-
-void uring_submit_read(uring_queue * uring, int fd, void * dst, size_t count) {
-	struct io_uring_sqe * sqe = uring_new_submission(uring);
-	sqe->opcode = IORING_OP_READ;
-	sqe->fd = fd;
-	sqe->addr = (uintptr_t)dst;
-	sqe->len = count;
-	sqe->flags = 0;
-	sqe->ioprio = 0;
-	sqe->user_data = EVENT_CONSOLE_READ;
-}
-
-void uring_submit_write_linked(uring_queue * uring, int fd, void * src, size_t count) {
+void create_console_prompt(uring_queue * uring) {
 	struct io_uring_sqe * sqe = uring_new_submission(uring);
 	sqe->opcode = IORING_OP_WRITE;
-	sqe->fd = fd;
-	sqe->addr = (uintptr_t)src;
-	sqe->len = count;
+	sqe->fd = STDOUT;
+	sqe->addr = (uintptr_t)"Command: ";
+	sqe->len = strlen("Command: ");
 	sqe->flags = IOSQE_IO_LINK;
 	sqe->ioprio = 0;
 	sqe->user_data = EVENT_OTHER;
+
+	sqe = uring_new_submission(uring);
+	sqe->opcode = IORING_OP_READ;
+	sqe->fd = STDIN;
+	sqe->addr = (uintptr_t)&buffer;
+	sqe->len = sizeof(buffer);
+	sqe->flags = 0;
+	sqe->ioprio = 0;
+	sqe->user_data = EVENT_CONSOLE_READ;
 }
