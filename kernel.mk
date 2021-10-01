@@ -62,7 +62,7 @@ build-all:
 	$(MAKE) build
 
 .PHONY: build
-build: build-init
+build: init
 	$(call copy-config,records,bzImage-build)
 	(cat initramfs.conf; $(MAKE) _gen-cpio-list) > build/initramfs.conf 
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage

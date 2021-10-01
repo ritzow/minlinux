@@ -1,8 +1,8 @@
 
-#include "syscall.h"
-#include "uring_ctl.h"
-#include "util.h"
-#include "command.h"
+#include <minlinux/syscall.h>
+#include <minlinux/uring_ctl.h>
+#include <minlinux/util.h>
+#include "include/command.h"
 
 /* for struct iovec */
 #include <linux/uio.h>

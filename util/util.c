@@ -1,5 +1,5 @@
-#include "syscall.h"
-#include "util.h"
+#include <minlinux/syscall.h>
+#include <minlinux/util.h>
 
 void *memmove(void *dst, const void *src, size_t len) {
 	ssize_t pos = (dst <= src) ? -1 : (long)len;

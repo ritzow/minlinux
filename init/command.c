@@ -1,7 +1,7 @@
-#include "syscall.h"
-#include "util.h"
-#include "uring_ctl.h"
-#include "command.h"
+#include <minlinux/syscall.h>
+#include <minlinux/util.h>
+#include <minlinux/uring_ctl.h>
+#include "include/command.h"
 
 #define CMD_PROTO(name) void name(uring_queue * uring, int argc, \
 	char * argv[argc], char * envp[], char * next)

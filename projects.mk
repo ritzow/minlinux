@@ -5,12 +5,7 @@ export PROJECT_DIR COMMON_PRE_MK
 
 .PHONY: init
 init:
-	$(MAKE) -C minlinux
-	$(MAKE) -C init \
-		COMMON.MK=$(abspath common.mk) \
-		BUILD_DIR="$(abspath build)" \
-		OUT_DIR=$(abspath build/out) \
-		init
+	@$(MAKE) -C init -f init.mk init
 
 .PHONY: util
 util:

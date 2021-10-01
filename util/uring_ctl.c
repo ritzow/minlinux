@@ -1,6 +1,6 @@
-#include "syscall.h"
-#include "uring_ctl.h"
-#include "util.h"
+#include <minlinux/syscall.h>
+#include <minlinux/uring_ctl.h>
+#include <minlinux/util.h>
 
 /* Example code from liburing https://man.archlinux.org/man/io_uring.7 */
 
