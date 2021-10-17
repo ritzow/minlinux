@@ -30,6 +30,10 @@ inspect-kernel:
 kbuild-docs:
 	less $(LINUX_SRC_DIR)/Documentation/kbuild/kbuild.rst
 
+.PHONY: imgfile
+imgfile:
+	@echo $(abspath $(KERNEL_BINARY_FILE))
+
 .PHONY: configure-kernel
 configure-kernel:
 	$(MAKE) -C $(LINUX_SRC_DIR) menuconfig	
@@ -38,7 +42,8 @@ configure-kernel:
 .PHONY: run
 run: 
 	qemu-system-x86_64 -vga none -nographic -sandbox on \
-	-kernel $(KERNEL_BINARY_FILE) -append "console=ttyS0"
+	-cpu Icelake-Server-v4 \
+	-kernel $(KERNEL_BINARY_FILE) -append "console=ttyS0" 
 
 .PHONY: run-efi
 run-efi: 
@@ -62,11 +67,11 @@ build-all:
 	$(MAKE) build
 
 .PHONY: build
-build: init
-	$(call copy-config,records,bzImage-build)
-	(cat initramfs.conf; $(MAKE) _gen-cpio-list) > build/initramfs.conf 
+build: init.proj build/initramfs.conf
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage
-	echo "bzImage is located at" $(KERNEL_BINARY_FILE)
+
+build/initramfs.conf: initramfs.conf kernel.mk
+	(cat initramfs.conf; $(MAKE) _gen-cpio-list) > build/initramfs.conf 
 
 # Generate lines in the cpio archive specification
 .PHONY: _gen-cpio-list
@@ -79,7 +84,7 @@ _gen-cpio-list:
 		elif test -f $$LINE; then
 			echo "file" $${LINE#build/initramfs} $$(realpath $$LINE) 755 0 0
 		fi
-	done.
+	done
 
 .PHONY: install-kernel-headers
 install-kernel-headers:

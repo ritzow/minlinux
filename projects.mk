@@ -3,13 +3,9 @@ COMMON_PRE_MK = $(PROJECT_DIR)/make/common.pre.mk
 
 export PROJECT_DIR COMMON_PRE_MK
 
-.PHONY: init
-init:
-	@$(MAKE) -C init -f init.mk init
-
-.PHONY: util
-util:
-	@$(MAKE) -C util -f util.mk util
+.PHONY: %.proj
+%.proj:
+	@$(MAKE) -C $* -f $*.mk $*
 
 .PHONY: build-modload
 build-modload:

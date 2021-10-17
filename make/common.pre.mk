@@ -2,9 +2,9 @@ CC_STATIC=gcc
 CFLAGS_STATIC=-Wall -Wextra -Werror \
 	-Wno-unused-parameter -Wno-unused-variable \
 	-fno-asynchronous-unwind-tables \
-	-fno-ident -Os -nostdlib -static -lgcc \
+	-fno-ident -O3 -nostdlib -static -lgcc \
 	-I $(BUILD_DIR)/include -I $(INCLUDE_DIR) \
-	-march=x86-64
+	-march=icelake-server
 
 BUILD_DIR = $(PROJECT_DIR)/build
 OUTPUT_DIR = $(BUILD_DIR)/projects

@@ -21,7 +21,7 @@ typedef struct {
 	__builtin_strlen(__FILE__ ":" xstr(__LINE__) "\n"))
 
 #define WRITESTR(str) ({\
-	write(0, (str), strlen(str));\
+	write(0, (str), __builtin_strlen(str));\
 })
 
 #define SYSCHECK(expr) ({\
@@ -30,7 +30,7 @@ typedef struct {
 		WRITESTR(__FILE__ ":" xstr(__LINE__) " syscall error ");\
 		intstr str = int_to_str(res);\
 		write(0, str.str, strlen(str.str));\
-		write(0, "\n", strlen("\n"));\
+		WRITESTR("\n");\
 		exit(-res);\
 	}\
 	res;\

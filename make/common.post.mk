@@ -11,7 +11,7 @@ $(project): \
 
 .PHONY: project-deps
 project-deps:
-	$(foreach proj,$(project-deps),$(MAKE) -C $(PROJECT_DIR) -f projects.mk $(proj))
+	$(foreach proj,$(project-deps),$(MAKE) -C $(PROJECT_DIR) -f projects.mk $(proj).proj)
 
 .SECONDEXPANSION:
 

@@ -32,7 +32,7 @@ asm(
 	"call start\n"               // main() returns the status code, we'll exit with it.
 );
 
-static sigset_t allsignals = ~((sigset_t)1); /* no signals currntly */
+static sigset_t allsignals = ~((sigset_t)1);
 
 enum {
 	EVENT_CONSOLE_READ,
@@ -79,7 +79,7 @@ void init(uring_queue *uring) {
 	submit_sig_listen(uring);
 }
 
-void handle(uring_queue * uring, struct io_uring_cqe * cqe, int argc, 
+void handle(uring_queue * restrict uring, struct io_uring_cqe * restrict cqe, int argc, 
 	char * argv[argc], char * envp[]) {
 	switch(cqe->user_data) {
 		case EVENT_CONSOLE_READ:
@@ -124,7 +124,7 @@ void process_signal() {
 	}
 }
 
-void process_input(uring_queue *uring, struct io_uring_cqe *cqe, 
+void process_input(uring_queue * restrict uring, struct io_uring_cqe * restrict cqe, 
 	int argc, char * argv[argc], char * envp[]) {
 	if (cqe->res > 0) {
 		/* TODO support reading less than a full line with newline char */
