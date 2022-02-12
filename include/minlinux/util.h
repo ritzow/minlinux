@@ -21,7 +21,7 @@ typedef struct {
 	__builtin_strlen(__FILE__ ":" xstr(__LINE__) "\n"))
 
 #define WRITESTR(str) ({\
-	write(0, (str), __builtin_strlen(str));\
+	write(0, (str), strlen(str));\
 })
 
 #define SYSCHECK(expr) ({\

@@ -67,6 +67,9 @@ Based on nolibc.h, located in the Linux source tree at tools/include/nolibc
 /* For ARG_MAX */
 #include <linux/limits.h>
 
+/* For sysinfo */
+#include <linux/sysinfo.h>
+
 /* For mmap, always this value on x86_64 */
 #define PAGE_SIZE 4096
 
@@ -430,6 +433,10 @@ LOCAL int waitid(idtype_t idtype, id_t id, siginfo_t *infop, int options,
 
 LOCAL int pivot_root(const char * new_root, const char * put_old) {
 	return my_syscall2(__NR_pivot_root, new_root, put_old);
+}
+
+LOCAL int sysinfo(struct sysinfo * info) {
+	return my_syscall1(__NR_sysinfo, info);
 }
 
 #endif

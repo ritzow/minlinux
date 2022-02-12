@@ -11,3 +11,5 @@ OUTPUT_DIR = $(BUILD_DIR)/projects
 INCLUDE_DIR = $(PROJECT_DIR)/include
 
 COMMON_POST_MK = $(PROJECT_DIR)/make/common.post.mk
+
+git=git clone --single-branch --depth 1 --branch $(2) $(1) $(BUILD_DIR)/$(3)

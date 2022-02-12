@@ -20,6 +20,7 @@ CMD_PROTO(cmd_cat);
 CMD_PROTO(cmd_run);
 CMD_PROTO(cmd_env);
 CMD_PROTO(cmd_exit);
+CMD_PROTO(cmd_usage);
 
 struct {
 	char * name;
@@ -31,7 +32,8 @@ struct {
 	{"cat", cmd_cat},
 	{"run", cmd_run},
 	{"env", cmd_env},
-	{"exit", cmd_exit}
+	{"exit", cmd_exit},
+	{"usage", cmd_usage}
 };
 
 void process_command(char * args, uring_queue * uring, int argc, 
@@ -141,6 +143,16 @@ CMD_PROTO(cmd_env) {
 
 CMD_PROTO(cmd_exit) {
 	reboot_hard(LINUX_REBOOT_CMD_POWER_OFF);
+}
+
+CMD_PROTO(cmd_usage) {
+	struct sysinfo info;
+	SYSCHECK(sysinfo(&info));
+	WRITESTR("Memory Used/Total: ");
+	write_int((info.totalram - info.freeram) * info.mem_unit);
+	WRITESTR("/");
+	write_int(info.totalram * info.mem_unit);
+	WRITESTR(" bytes\n");
 }
 
 void exec_prog(const char * path, char * next) {
