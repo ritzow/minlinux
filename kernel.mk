@@ -1,7 +1,11 @@
-KERNEL_CONFIG_FILE=boot.conf
-LINUX_SRC_URL=https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.14.7.tar.xz
-LINUX_SRC_DIR=build/linux-5.14.7
-KERNEL_BINARY_FILE=$(LINUX_SRC_DIR)/$(shell $(MAKE) --silent -C $(LINUX_SRC_DIR) image_name)
+LINUX_SRC_DIR=$(PROJECT_DIR)/linux
+
+echo $(LINUX_SRC_DIR)
+
+$(MAKE) -C $(LINUX_SRC_DIR) oldconfig && $(MAKE) -C $(LINUX_SRC_DIR) prepare
+
+KERNEL_BINARY_FILE := $(LINUX_SRC_DIR)/$(shell $(MAKE) --silent -C $(LINUX_SRC_DIR) image_name)
+copy-config = cp $(LINUX_SRC_DIR)/.config $(1)/$(2)-$(shell date --iso-8601=seconds).config
 CONFIG_SET := $(LINUX_SRC_DIR)/scripts/config --file $(LINUX_SRC_DIR)/.config
 
 .PHONY: help-kernel
@@ -54,10 +58,15 @@ run-efi:
 buildrun: build
 	$(MAKE) run
 
+.PHONY: kernel
+kernel: $(KERNEL_BINARY_FILE)
+
+#The real build target
+$(KERNEL_BINARY_FILE): $(LINUX_SRC_DIR) $(BUILD_DIR)/kernel_key.pem 
+	$(MAKE) build-kernel-initial
+
 .PHONY: build-all
 build-all:
-	$(MAKE) dirs
-	$(MAKE) download-kernel
 	$(MAKE) use-saved-config
 	$(MAKE) gen-key
 	$(MAKE) build-kernel-initial
@@ -70,7 +79,7 @@ build-all:
 build: init.proj build/initramfs.conf
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 bzImage
 
-build/initramfs.conf: initramfs.conf kernel.mk
+$(BUILD_DIR)/initramfs.conf: $(PROJECT_DIR)/initramfs.conf kernel.mk
 	(cat initramfs.conf; $(MAKE) _gen-cpio-list) > build/initramfs.conf 
 
 # Generate lines in the cpio archive specification
@@ -101,7 +110,7 @@ apt-install-proj-reqs:
 
 #Build the kernel without initramfs in order to generate modules.builtin
 .PHONY: build-kernel-initial
-build-kernel-initial:
+build-kernel-initial: $(LINUX_SRC_DIR)
 	$(CONFIG_SET) --disable CONFIG_BOOT_CONFIG
 	$(CONFIG_SET) --disable CONFIG_BLK_DEV_INITRD
 	$(MAKE) -C $(LINUX_SRC_DIR) --jobs=4 vmlinux
@@ -119,28 +128,14 @@ build-bootconfig:
 # https://wiki.gentoo.org/wiki/Custom_Initramfs
 # tools/bootconfig/bootconfig -a $(KERNEL_CONFIG_FILE) $(INITRAMFS_FILE)
 
-.PHONY: gen-key
-gen-key:
+$(BUILD_DIR)/kernel_key.pem:
 	openssl req -new -utf8 -sha256 -days 36500 -batch -x509 \
-		-config kernel_keygen.conf -outform PEM -keyout build/kernel_key.pem -out build/kernel_key.pem
-
-#List files in current initramfs archive
-.PHONY: list-initramfs
-list-initramfs:
-	@cat $(LINUX_SRC_DIR)/usr/initramfs_data.cpio | cpio --list
-	
-#Download the kernel source code
-.PHONY: download-kernel
-download-kernel: dirs
-	curl -s $(LINUX_SRC_URL) | tar --extract --xz --directory build -f -
+		-config $(PROJECT_DIR)/kernel_keygen.conf -outform PEM -keyout $(BUILD_DIR)/kernel_key.pem -out $(BUILD_DIR)/kernel_key.pem
 
 gitclone=git clone --single-branch --depth 1 --branch $(1) $(3) $(2)
 
-.PHONY: download-manual
- download-manual:
-	$(call gitclone,master,build/man-src,git://git.kernel.org/pub/scm/docs/man-pages/man-pages.git)
-	$(MAKE) -C build/man-src -j install prefix=../manual
-	rm -r build/man-src
+$(BUILD_DIR)/manual:
+	$(MAKE) -C man-pages -j install prefix=$(BUILD_DIR)/manual
 
 #Create a backup point of the current .config
 .PHONY: backup-config
@@ -165,15 +160,8 @@ use-saved-config:
 clean:
 	$(call copy-config,records,pre-clean)
 	$(MAKE) -C $(LINUX_SRC_DIR) clean
-	rm -r build/initramfs build/kernel_key.pem $(LINUX_SRC_DIR)
-	
-.PHONY: kernel-clean
-kernel-clean:
-	$(MAKE) -C $(LINUX_SRC_DIR) clean
-	
-.PHONY: dirs
-dirs:
-	mkdir --parents build/initramfs records
+	rm -rf $(BUILD_DIR)
+#	rm -r build/initramfs build/kernel_key.pem $(LINUX_SRC_DIR)
 	
 .PHONY: viewman
 viewman:

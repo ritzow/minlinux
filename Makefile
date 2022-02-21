@@ -1,14 +1,27 @@
 #Automatically passed to sub-makes
 MAKEFLAGS += --no-print-directory --no-builtin-rules --no-builtin-variables
 
-copy-config = cp $(LINUX_SRC_DIR)/.config $(1)/$(2)-$(shell date --iso-8601=seconds).config
+#PROJECT_DIR = $(abspath .)
+#BUILD_DIR = $(PROJECT_DIR)/build
 
-.PHONY: help
-help:
-	@echo "build: Build the kernel and modules using .config in" $(LINUX_SRC_DIR)
-	@echo "download: Download the linux sources into directory" $(LINUX_SRC_DIR)
+# .PHONY: help
+# help:
+# 	@echo $(PROJECT_DIR)/kernel.mk contains kernel build code
 
-include projects.mk kernel.mk
+# .PHONY: minlinux
+# minlinux:
+# 	@python3 -B build.py minlinux
 
-.DEFAULT:
-	$(error Unsupported target "$@")
+#include projects.mk kernel.mk
+
+.PHONY: kernel
+kernel:
+	@python3 -B build.py $@
+
+.PHONY: %
+%:
+	@python3 -B build.py $@
+
+#.DEFAULT:
+#	@python3 -B build.py $@
+#	$(error Unsupported target "$@")

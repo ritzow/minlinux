@@ -4,3 +4,6 @@
 	branch = v5.17-rc4
 	shallow = true
 	update = checkout
+[submodule "man-pages"]
+	path = man-pages
+	url = git://git.kernel.org/pub/scm/docs/man-pages/man-pages.git
