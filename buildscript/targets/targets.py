@@ -1,9 +1,7 @@
-from buildscript.target import *
+from . import kernel
+from util.target import requires
 
-from . import kernel as kern, project
-
-@requires(kern.build)
+@requires(kernel.build)
 def kernel():
 	'''Build the linux kernel'''
-	print("kernel")
 	pass
