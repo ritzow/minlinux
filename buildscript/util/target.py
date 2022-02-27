@@ -1,9 +1,9 @@
 from pathlib import Path, PosixPath, PurePosixPath
-from typing import Callable, Set
+from typing import Callable, Dict, Tuple
 
 Target = Callable[[], None]
 calledTargets = []
-availableTargets: Set[Target] = set()
+availableTargets: Dict[str, Tuple[Target, Target]] = dict()
 
 def target_name(func : Target):
 	return func.__module__ + '.' + func.__name__
@@ -26,7 +26,7 @@ def requires(*depends : Target):
 					target()
 				func()
 				calledTargets.append(func)
-		availableTargets.add(func)
+		availableTargets[func.__name__] = (func, on_target)
 		return on_target
 	return transform
 

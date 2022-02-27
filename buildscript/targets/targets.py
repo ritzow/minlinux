@@ -1,7 +1,4 @@
-from . import kernel
-from util.target import requires
 
-@requires(kernel.build)
-def kernel():
-	'''Build the linux kernel'''
-	pass
+#List all target files here
+from . import kernel, project
+assert kernel, project
