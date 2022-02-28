@@ -12,3 +12,8 @@ installed_config: Posix = kernel_source.joinpath('.config')
 output: Posix = project_root.joinpath('build')
 output_kernel_signing_key: Posix = output.joinpath('kernel_key.pem')
 output_kernel_initramfs: Posix = output.joinpath('initramfs.conf')
+
+output_kernel_headers: Posix = output.joinpath('include', 'kernel')
+
+output_init: Posix = output.joinpath('init')
+output_init_elf: Posix = output_init.joinpath('init')
