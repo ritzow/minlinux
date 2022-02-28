@@ -11,10 +11,21 @@ def target_name(func : Target):
 def target_description(t : Target):
 	return t.__name__ +  ((': ' + t.__doc__) if t.__doc__ != None else '')
 
-def is_newer(src : PurePosixPath, dst : PurePosixPath) -> bool:
-	srcfile = PosixPath(src)
+def is_any_newer(dst : PurePosixPath, *src : PurePosixPath) -> bool:
 	dstfile = PosixPath(dst)
-	return not dstfile.exists() or (srcfile.stat().st_mtime > dstfile.stat().st_mtime)
+	if not dstfile.exists():
+		return True
+	dstmtime = dstfile.stat().st_mtime
+	for file in src:
+		srcmtime = PosixPath(file).stat().st_mtime
+		if srcmtime > dstmtime:
+			return True
+	return False
+
+def is_newer(src : PurePosixPath, dst : PurePosixPath) -> bool:
+	dstfile = PosixPath(dst)
+	return not dstfile.exists() or \
+		(PosixPath(src).stat().st_mtime > dstfile.stat().st_mtime)
 
 def requires(*depends : Target):
 	def transform(func : Target): #-> Callable[[Callable[[], None]], Callable[[], None]]:

@@ -1,4 +1,4 @@
 
 #List all target files here
-from . import shared, kernel, project
+from . import kernel, project
 assert kernel, project

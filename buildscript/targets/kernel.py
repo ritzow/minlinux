@@ -1,12 +1,11 @@
-from datetime import datetime
 import os
 import subprocess
 
 from pytz import timezone
-from util.target import Target, requires, dirs, is_newer
+from util.target import requires, dirs, is_newer
 import util.places
 
-from pathlib import Path, PosixPath
+from pathlib import Path, PosixPath, PurePosixPath
 import shutil
 
 def config_modify(*args : str):
@@ -62,12 +61,6 @@ def signing_key():
 			'-out', str(util.places.output_kernel_signing_key)
 		])
 
-@requires(dirs(util.places.kernel_source))
-def build_kernel_initial():
-	#config_unset('CONFIG_BOOT_CONFIG')
-	#config_unset('CONFIG_BLK_DEV_INITRD')
-	kernel_target('vmlinux')
-
 def lines(*strs) -> str:
 	return '\n'.join(list(strs))
 
@@ -75,27 +68,43 @@ def lines(*strs) -> str:
 def generate_initramfs():
 	'''Generate list of directives for files to include in 
 	built-in tmpfs (includes init program)'''
-	initramfs = lines(
-		#Init program, 
-		#this only works if it is named /init (required by linux initramfs)
-		'file /init ' + util.places.output_init_elf + ' 777 0 0'
-		#file /modload ../../modload/modload 777 0 0
-		'dir /proc 777 0 0',
-		'dir /sys 777 0 0',
-		'dir /dev 777 0 0',
-		'nod /dev/console 777 0 0 c 5 1'
-	)
-	#TODO build initramfs
+	if is_newer(PurePosixPath(__file__), util.places.output_kernel_initramfs):
+		initramfs = lines(
+			#this only works if it is named /init (required by linux initramfs)
+			'file /init ' + str(util.places.output_init_elf) + ' 777 0 0',
+			'dir /proc 777 0 0',
+			'dir /sys 777 0 0',
+			'dir /dev 777 0 0',
+			'nod /dev/console 777 0 0 c 5 1'
+		)
+		#TODO build initramfs
 
-	PosixPath(util.places.output_kernel_initramfs) \
-		.write_bytes(initramfs.encode(encoding='UTF-8'))
+		PosixPath(util.places.output_kernel_initramfs) \
+			.write_bytes(initramfs.encode(encoding='UTF-8'))
 
 #TODO build system should allow each target to provide a timestamp or
 #indicate if outdated, then all dependent targets will be called again
 
+@requires()
+def bare_kernel():
+	use_saved_config()
+	kernel_target('vmlinux')
+
+@requires(bare_kernel, dirs(util.places.output))
+def kernel_headers():
+	'''Install the Linux kernel headers in the output directory for use by init'''
+	new_env = os.environ.copy()
+	new_env.update([('INSTALL_HDR_PATH', str(util.places.output))])
+	subprocess.Popen([shutil.which('make'), '-C', 
+		util.places.kernel_source, 'headers_install',
+		'INSTALL_HDR_PATH=' + str(util.places.output)], 
+		executable=shutil.which('make'),
+		env=new_env).wait()
+
 @requires(
 	signing_key,
 	generate_initramfs,
+	kernel_headers
 )
 def kernel():
 	'''Build the bootable linux kernel and init system'''
@@ -115,22 +124,7 @@ def kernel():
 		'CONFIG_RD_ZSTD',
 		'CONFIG_RD_LZ4'
 	)
-
 	kernel_target('bzImage')
-	pass
-
-@requires(dirs(util.places.output_kernel_headers))
-def kernel_headers():
-	'''Install the Linux kernel headers in in the output directory for use by init'''
-	new_env = os.environ.copy()
-	new_env.update([('INSTALL_HDR_PATH', str(util.places.output_kernel_headers))])
-	print(util.places.output_kernel_headers)
-	process = subprocess.Popen([shutil.which('make'), '-C', 
-		util.places.kernel_source, '--jobs=4', 'headers_install'
-		'INSTALL_HDR_PATH=' + str(util.places.output_kernel_headers)], 
-		executable=shutil.which('make'),
-		env=new_env)
-	process.wait()
 
 @requires()
 def clean():
@@ -142,6 +136,7 @@ def clean():
 def save_config():
 	'''Copy config from kernel source directory to git tracked directory'''
 	shutil.copy2(util.places.installed_config, util.places.custom_config)
+	from datetime import datetime
 	timestamp = datetime.fromtimestamp(
 		Path(util.places.custom_config).stat().st_mtime, timezone('UTC'))
 	print('Updated config at ' + str(util.places.custom_config) + ' ' + str(timestamp))
