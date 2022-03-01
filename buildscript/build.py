@@ -8,9 +8,9 @@ import sys
 
 def execute_target(target : util.target.Target):
 	target()
-	print("Called:")
-	for t in util.target.calledTargets:
-		print(" - " + util.target.target_description(t))
+	# print("Called:")
+	# for t in util.target.calledTargets:
+	# 	print(" - " + util.target.target_description(t))
 
 def main():
 	@util.target.requires()

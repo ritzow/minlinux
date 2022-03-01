@@ -1,23 +1,25 @@
 from pathlib import PosixPath, PurePosixPath
-from typing import List, Tuple
-from util.target import dirs, is_any_newer, is_newer, requires
+from typing import List
+from util.target import is_any_newer, requires
 import util.places
 import shutil
 import subprocess
 import itertools
 
 def gcc(inputs : List[PurePosixPath], output : PurePosixPath, flags : List[str]):
+	import util.log
+	util.log.log('Generate \'' + str(output) + '\'')
 	args = [shutil.which('gcc'), 
-		'-Wall', '-Wextra', '-Werror',
+		'-Wall', '-Wextra', '-Werror', '-Wfatal-errors', '--verbose',
 		'-Wno-unused-parameter', '-Wno-unused-variable',
 		'-fno-asynchronous-unwind-tables', '-fno-ident', 
 		'-O3', '-nostdlib', '-static', '-lgcc', #'-pie',
 		'-I', str(util.places.includes), 
 		'-I', str(util.places.output_includes),
-		'-march=icelake-server',
+		'-march=x86-64',
 		'-o', str(output), *flags,
 		*[str(f) for f in inputs]]
-	subprocess.run(args)
+	subprocess.run(args, stderr=subprocess.STDOUT)
 
 def out_file(input : PurePosixPath) -> PurePosixPath:
 	rel = input.relative_to(util.places.project_root).with_suffix('.o')

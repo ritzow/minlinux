@@ -35,6 +35,8 @@ def requires(*depends : Target):
 			if func not in calledTargets:
 				for target in depends:
 					target()
+				import util.log
+				util.log.log('Execute target \'' + func.__name__ + '\'')
 				func()
 				calledTargets.append(func)
 		availableTargets[func.__name__] = (func, on_target)
@@ -45,5 +47,9 @@ def dirs(*depends : PurePosixPath) -> Target:
 	def make_dirs(): #Target instance
 		'''Generate directories: ''' + str.join(', ', (str(x) for x in depends))
 		for dir in depends:
-			Path(dir).mkdir(parents=True, exist_ok=True)
+			p = PosixPath(dir)
+			if not p.exists():
+				Path(dir).mkdir(parents=True, exist_ok=True)
+				import util.log
+				util.log.log('Create directory ' + str(dir))
 	return make_dirs

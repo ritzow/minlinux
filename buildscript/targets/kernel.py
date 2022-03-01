@@ -141,17 +141,24 @@ def save_config():
 		Path(util.places.custom_config).stat().st_mtime, timezone('UTC'))
 	print('Updated config at ' + str(util.places.custom_config) + ' ' + str(timestamp))
 
+def kernel_path() -> PurePosixPath:
+	return  util.places.kernel_source.joinpath(
+			kernel_target_str('image_name').strip())
+
 @requires()
 def run_efi():
 	'''Build and run the kernel image in the QEMU emulator as an EFI application'''
 	subprocess.run([
 		'qemu-system-x86_64', '-vga', 'none', 
 		'-nographic', '-sandbox', 'on',
-		'-kernel', util.places.kernel_source.joinpath(
-			kernel_target_str('image_name').strip()),
+		'-kernel', str(kernel_path()),
 		'-append', 'console=ttyS0',
 		'-bios', '/usr/share/ovmf/OVMF.fd'
 	])
+
+@requires()
+def kernel_info():
+	print('Kernel size: ' + str(PosixPath(kernel_path()).stat().st_size) + ' bytes')
 
 @requires()
 def diff_configs():

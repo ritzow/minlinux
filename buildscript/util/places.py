@@ -17,6 +17,7 @@ output_kernel_initramfs: Posix = output.joinpath('initramfs.conf')
 output_bin: Posix = output.joinpath('bin')
 
 output_includes: Posix = output.joinpath('include')
+output_manual: Posix = output.joinpath('manual')
 
 output_init: Posix = output_bin.joinpath('init')
 output_init_elf: Posix = output_init.joinpath('init')
