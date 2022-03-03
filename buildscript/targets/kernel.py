@@ -72,6 +72,7 @@ def generate_initramfs():
 		initramfs = lines(
 			#this only works if it is named /init (required by linux initramfs)
 			'file /init ' + str(util.places.output_init_elf) + ' 777 0 0',
+			'file /hello ' + str(util.places.output_bin.joinpath('hello')) + ' 777 0 0',
 			'dir /proc 777 0 0',
 			'dir /sys 777 0 0',
 			'dir /dev 777 0 0',

@@ -116,7 +116,7 @@ CMD_PROTO(cmd_run) {
 		char * next = terminate_arg(path);
 		struct clone_args cl_args = {
 			.flags = CLONE_NEWNET | CLONE_NEWIPC | CLONE_NEWCGROUP |
-				CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUSER | CLONE_NEWUTS |
+				CLONE_NEWNS | CLONE_NEWPID /*| CLONE_NEWUSER*/ | CLONE_NEWUTS |
 				CLONE_CLEAR_SIGHAND,
 			.exit_signal = SIGCHLD
 		};
@@ -127,6 +127,7 @@ CMD_PROTO(cmd_run) {
 			write_int(tid);
 			WRITESTR("\n");
 		} else if(tid == 0) {
+			SYSCHECK(setuid(1));
 			exec_prog(path, next);
 		} else {
 			WRITE_ERR("clone3 error", tid);

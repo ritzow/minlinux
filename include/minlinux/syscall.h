@@ -70,6 +70,9 @@ Based on nolibc.h, located in the Linux source tree at tools/include/nolibc
 /* For sysinfo */
 #include <linux/sysinfo.h>
 
+/* uid_t? */
+#include <linux/types.h>
+
 /* For mmap, always this value on x86_64 */
 #define PAGE_SIZE 4096
 
@@ -317,8 +320,8 @@ LOCAL void * brk(void *addr) {
 }
 
 LOCAL __attribute__((noreturn)) 
-void exit(int status) {
-	my_syscall1(__NR_exit, status & 255);
+void exit(unsigned short status) {
+	my_syscall1(__NR_exit, (int)status /*status & 255*/);
 	__builtin_unreachable();
 }
 
@@ -416,6 +419,10 @@ LOCAL long futex(uint32_t *uaddr, int futex_op, uint32_t val,
 LOCAL int openat2(int dirfd, const char *pathname, 
 					struct open_how *how, size_t size) {
 	return my_syscall4(__NR_openat2, dirfd, pathname, how, size);
+}
+
+LOCAL int setuid(uid_t uid) {
+	return my_syscall1(__NR_setuid, uid);
 }
 
 LOCAL int signalfd(int fd, const sigset_t *mask, int flags) {

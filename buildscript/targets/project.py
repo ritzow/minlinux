@@ -10,7 +10,9 @@ def gcc(inputs : List[PurePosixPath], output : PurePosixPath, flags : List[str])
 	import util.log
 	util.log.log('Generate \'' + str(output) + '\'')
 	args = [shutil.which('gcc'), 
-		'-Wall', '-Wextra', '-Werror', '-Wfatal-errors', '--verbose',
+		'-Wall', '-Wextra', '-Werror', '-Wfatal-errors', 
+		#'--verbose',
+		'-fno-builtin',
 		'-Wno-unused-parameter', '-Wno-unused-variable',
 		'-fno-asynchronous-unwind-tables', '-fno-ident', 
 		'-O3', '-nostdlib', '-static', '-lgcc', #'-pie',
@@ -36,6 +38,16 @@ def c_files(*rel_dir : str):
 	#	raise ValueError(rel_dir)
 	return PosixPath(util.places.project_root.joinpath(*rel_dir)).glob("**/*.c")
 
+def out_for(*dirs : str):
+	return [out_file(f) for f in itertools.chain(*tuple(c_files(dir) for dir in dirs))]
+
+@requires()
+def hello_world():
+	'''Build test hello world program'''
+	for file in c_files('hello-world'):
+		gcc_c(file)
+	gcc(out_for('hello-world', 'util'), util.places.output_bin.joinpath('hello'), [])
+
 @requires()
 def lib_util():
 	'''Build the utility library used by /init'''
@@ -50,6 +62,6 @@ def lib_init():
 @requires(lib_util, lib_init)
 def init():
 	'''Build the /init program'''
-	dependencies = [out_file(f) for f in itertools.chain(c_files('init'), c_files('util'))]
+	dependencies = out_for('init', 'util')
 	if is_any_newer(util.places.output_init_elf, *dependencies):
 		gcc(dependencies, util.places.output_init_elf, [])
