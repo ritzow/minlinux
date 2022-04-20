@@ -42,6 +42,7 @@ enum {
 
 __attribute__((noreturn))
 void start(int argc, char * argv[], char * envp[]) {
+	// specific serial port is at /sys/devices/platform/serial8250/tty
 	int con = SYSCHECK(open("/dev/console", O_APPEND | O_RDWR, 0));
 	SYSCHECK(dup3(con, 1, 0));
 	SYSCHECK(dup3(con, 2, 0));

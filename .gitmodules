@@ -7,3 +7,9 @@
 [submodule "man-pages"]
 	path = man-pages
 	url = git://git.kernel.org/pub/scm/docs/man-pages/man-pages.git
+	shallow = true
+[submodule "dropbear"]
+	path = dropbear
+	url = https://github.com/mkj/dropbear.git
+	branch = master
+	shallow = true

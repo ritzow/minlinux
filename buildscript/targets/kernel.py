@@ -73,6 +73,7 @@ def generate_initramfs():
 			#this only works if it is named /init (required by linux initramfs)
 			'file /init ' + str(util.places.output_init_elf) + ' 777 0 0',
 			'file /hello ' + str(util.places.output_bin.joinpath('hello')) + ' 777 0 0',
+			'file /busybox /home/ritzow/busybox 777 0 0',
 			'dir /proc 777 0 0',
 			'dir /sys 777 0 0',
 			'dir /dev 777 0 0',
@@ -101,6 +102,8 @@ def kernel_headers():
 		'INSTALL_HDR_PATH=' + str(util.places.output)], 
 		executable=shutil.which('make'),
 		env=new_env).wait()
+
+# TODO enable CONFIG_IP_PNP for automatic DHCP!!!
 
 @requires(
 	signing_key,
