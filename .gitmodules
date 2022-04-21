@@ -13,3 +13,8 @@
 	url = https://github.com/mkj/dropbear.git
 	branch = master
 	shallow = true
+[submodule "musl"]
+	path = musl
+	url = git://git.musl-libc.org/musl
+	branch = master
+	shallow = true

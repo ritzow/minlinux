@@ -4,7 +4,7 @@ from pathlib import PosixPath
 import subprocess, shutil
 from util.target import dirs, requires
 import util.places
-from . import kernel, project
+from . import kernel, project, dropbear, musl
 assert kernel, project
 
 @requires(dirs(util.places.output_manual))

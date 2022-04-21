@@ -53,7 +53,7 @@ def signing_key():
 	'''Generate a private key for signing kernel modules, stored in the linux kernel'''
 	if is_newer(util.places.custom_kernel_signing, 
 			util.places.output_kernel_signing_key):
-		subprocess.run(['openssl', 'req', '-new', '-utf8', '-sha256', 
+		subprocess.run([shutil.which('openssl'), 'req', '-new', '-utf8', '-sha256', 
 			'-days', '36500', '-batch', '-x509', 
 			'-config', str(util.places.custom_kernel_signing),
 			'-outform', 'PEM',
@@ -153,7 +153,7 @@ def kernel_path() -> PurePosixPath:
 def run_efi():
 	'''Build and run the kernel image in the QEMU emulator as an EFI application'''
 	subprocess.run([
-		'qemu-system-x86_64', '-vga', 'none', 
+		shutil.which('qemu-system-x86_64'), '-vga', 'none', 
 		'-nographic', '-sandbox', 'on',
 		'-kernel', str(kernel_path()),
 		'-append', 'console=ttyS0',
@@ -167,7 +167,7 @@ def kernel_info():
 @requires()
 def diff_configs():
 	'''Diff the saved kernel config and the installed kernel config. Installed in green'''
-	subprocess.run(['diff', '--color=always', '--speed-large-files',
+	subprocess.run([shutil.which('diff'), '--color=always', '--speed-large-files',
 		'-s', util.places.custom_config, util.places.installed_config]) 
 		#| less -r --quit-if-one-screen --quit-at-eof)
 
