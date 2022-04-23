@@ -32,7 +32,8 @@ asm(
 	"call start\n"               // main() returns the status code, we'll exit with it.
 );
 
-static sigset_t allsignals = ~((sigset_t)1);
+//TODO why is this 1 instead of 0?
+static sigset_t allsignals = ~((sigset_t)0);
 
 enum {
 	EVENT_CONSOLE_READ,
@@ -52,7 +53,9 @@ void start(int argc, char * argv[], char * envp[]) {
 
 	uring_queue uring = uring_init(16);
 
-	SYSCHECK(sigprocmask(SIG_SETMASK, &allsignals, NULL, sizeof(sigset_t)));
+	/* Ignore all signals because they are handled by signalfd, 
+	   will cause weird behavior for waitid on children, see waitid(2) */
+	SYSCHECK(sigprocmask(SIG_SETMASK, &allsignals, NULL));
 
 	init(&uring);
 
@@ -100,23 +103,24 @@ void process_signal() {
 	switch(siginfo.ssi_signo) {
 		case SIGCHLD: {
 			/* See sigaction(2) for siginfo field meanings for SIGCHLD */
-			siginfo_t info;
+			/* siginfo_t info;
 			SYSCHECK(waitid(P_PID, siginfo.ssi_pid, &info, WEXITED | WNOHANG, NULL));
 			WRITESTR("Child process ");
 			write_int(siginfo.ssi_pid);
 			WRITESTR(" exited with status ");
 			write_int(siginfo.ssi_status);
 			WRITESTR("\n");
+			break; */
 			break;
 		}
-		case SIGILL:
+		/* case SIGILL:
 		case SIGINT:
 		case SIGQUIT:
 		case SIGTERM:
 		case SIGSEGV:
 			WRITESTR("Received signal, powering off\n");
 			reboot_hard(LINUX_REBOOT_CMD_POWER_OFF);
-			break;
+			break; */
 		default:
 			WRITESTR("Received signal number ");
 			write_int(siginfo.ssi_signo);

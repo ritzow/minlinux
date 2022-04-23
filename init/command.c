@@ -115,9 +115,9 @@ CMD_PROTO(cmd_run) {
 	} else {
 		char * next = terminate_arg(path);
 		struct clone_args cl_args = {
-			.flags = CLONE_NEWNET | CLONE_NEWIPC | CLONE_NEWCGROUP |
-				CLONE_NEWNS | CLONE_NEWPID /*| CLONE_NEWUSER*/ | CLONE_NEWUTS |
-				CLONE_CLEAR_SIGHAND,
+			.flags = /* CLONE_NEWNET | */ CLONE_NEWIPC | CLONE_NEWCGROUP |
+				CLONE_NEWNS | CLONE_NEWPID /*| CLONE_NEWUSER*/ | CLONE_NEWUTS
+				/* | CLONE_CLEAR_SIGHAND */,
 			.exit_signal = SIGCHLD
 		};
 		pid_t tid = clone3(&cl_args, sizeof(struct clone_args));
@@ -126,8 +126,19 @@ CMD_PROTO(cmd_run) {
 			WRITESTR("Forked process ");
 			write_int(tid);
 			WRITESTR("\n");
+
+			siginfo_t siginfo;
+			SYSCHECK(waitid(P_PID, tid, &siginfo, WEXITED, NULL));
+
+			WRITESTR("Child process ");
+			write_int(siginfo.si_pid);
+			WRITESTR(" exited with status ");
+			write_int(siginfo.si_status);
+			WRITESTR("\n");
 		} else if(tid == 0) {
-			SYSCHECK(setuid(1));
+			//SYSCHECK(setuid(1));
+			//__u32 caps = CAP_TO_MASK();
+			//setcap(caps, caps, caps);
 			exec_prog(path, next);
 		} else {
 			WRITE_ERR("clone3 error", tid);
@@ -201,7 +212,11 @@ void exec_prog(const char * path, char * next) {
 	//https://www.kernel.org/doc/Documentation/filesystems/ramfs-rootfs-initramfs.txt
 	//chroot/pivot_root?
 
-	int execres = execveat(fd, "", args, envp, AT_EMPTY_PATH);
+	static sigset_t nosignals = (sigset_t)0;
+
+	SYSCHECK(sigprocmask(SIG_SETMASK, &nosignals, NULL));
+
+		int execres = execveat(fd, "", args, envp, AT_EMPTY_PATH);
 	WRITE_ERR("execveat returned ", execres);
 }
 

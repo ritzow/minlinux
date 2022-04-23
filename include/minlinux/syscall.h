@@ -73,6 +73,9 @@ Based on nolibc.h, located in the Linux source tree at tools/include/nolibc
 /* uid_t? */
 #include <linux/types.h>
 
+/* capabilities(7): capget/capset */
+#include <linux/capability.h>
+
 /* For mmap, always this value on x86_64 */
 #define PAGE_SIZE 4096
 
@@ -425,12 +428,24 @@ LOCAL int setuid(uid_t uid) {
 	return my_syscall1(__NR_setuid, uid);
 }
 
+LOCAL int setresuid(uid_t ruid, uid_t euid, uid_t suid) {
+	return my_syscall3(__NR_setresuid, ruid, euid, suid);
+}
+
+LOCAL int setresgid(gid_t rgid, gid_t egid, gid_t sgid) {
+	return my_syscall3(__NR_setresgid, rgid, egid, sgid);
+}
+
+LOCAL int setgroups(size_t size, const gid_t *list) {
+	return my_syscall2(__NR_setgroups, size, list);
+}
+
 LOCAL int signalfd(int fd, const sigset_t *mask, int flags) {
 	return my_syscall4(__NR_signalfd4, fd, mask, sizeof(sigset_t), flags);
 }
 
-LOCAL int sigprocmask(int how, const sigset_t *set, sigset_t *oldset, size_t sigsetsize) {
-	return my_syscall4(__NR_rt_sigprocmask, how, set, oldset, sigsetsize);
+LOCAL int sigprocmask(int how, const sigset_t *set, sigset_t *oldset) {
+	return my_syscall4(__NR_rt_sigprocmask, how, set, oldset, sizeof(sigset_t));
 }
 
 LOCAL int waitid(idtype_t idtype, id_t id, siginfo_t *infop, int options, 
@@ -444,6 +459,33 @@ LOCAL int pivot_root(const char * new_root, const char * put_old) {
 
 LOCAL int sysinfo(struct sysinfo * info) {
 	return my_syscall1(__NR_sysinfo, info);
+}
+
+LOCAL int prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5) {
+	return my_syscall5(__NR_prctl, option, arg2, arg3, arg4, arg5);
+}
+
+LOCAL int capget(cap_user_header_t hdrp, cap_user_data_t datap) {
+	return my_syscall2(__NR_capget, hdrp, datap);
+}
+
+LOCAL int capset(cap_user_header_t hdrp, cap_user_data_t datap) {
+	return my_syscall2(__NR_capset, hdrp, datap);
+}
+
+LOCAL int setcap(__u32 effective, __u32 permitted, __u32 inheritable) {
+	struct __user_cap_header_struct hdr = {
+		.version = _LINUX_CAPABILITY_VERSION_3,
+		.pid = 0
+	};
+
+	struct __user_cap_data_struct data = {
+		.effective = effective,
+		.permitted = permitted,
+		.inheritable = inheritable
+	};
+
+	return my_syscall2(__NR_capset, &hdr, &data);
 }
 
 #endif
