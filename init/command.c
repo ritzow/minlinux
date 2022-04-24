@@ -115,9 +115,9 @@ CMD_PROTO(cmd_run) {
 	} else {
 		char * next = terminate_arg(path);
 		struct clone_args cl_args = {
-			.flags = /* CLONE_NEWNET | */ CLONE_NEWIPC | CLONE_NEWCGROUP |
-				CLONE_NEWNS | CLONE_NEWPID /*| CLONE_NEWUSER*/ | CLONE_NEWUTS
-				/* | CLONE_CLEAR_SIGHAND */,
+			.flags = 0 /* CLONE_NEWNET | CLONE_NEWIPC | CLONE_NEWCGROUP |
+				CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUSER | CLONE_NEWUTS
+				| CLONE_CLEAR_SIGHAND */,
 			.exit_signal = SIGCHLD
 		};
 		pid_t tid = clone3(&cl_args, sizeof(struct clone_args));

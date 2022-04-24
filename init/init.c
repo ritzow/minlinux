@@ -48,8 +48,12 @@ void start(int argc, char * argv[], char * envp[]) {
 	SYSCHECK(dup3(con, 1, 0));
 	SYSCHECK(dup3(con, 2, 0));
 
-	SYSCHECK(mount(NULL, "/proc", "proc", MS_NOEXEC | MS_RDONLY, NULL));
+	SYSCHECK(mount(NULL, "/proc", "proc", MS_NOEXEC /* | MS_RDONLY */, NULL));
 	SYSCHECK(mount(NULL, "/sys", "sysfs", MS_NOEXEC | MS_RDONLY, NULL));
+
+	int printkfd = SYSCHECK(open("/proc/sys/kernel/printk", O_WRONLY, 0));
+	SYSCHECK(write(printkfd, "0", 1));
+	SYSCHECK(close(printkfd));
 
 	uring_queue uring = uring_init(16);
 
