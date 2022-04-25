@@ -3,16 +3,20 @@
 
 #include "syscall.h"
 
+#define STDIN 0
+#define STDOUT 1
+#define STDERR 2
+
 typedef struct {
 	const char * str;
 	/* large enough for -9223372036854775808 */
 	char val[21];
 } intstr;
 
-#define strlen(str) ({                          \
-	__builtin_constant_p((str)) ?           \
-		__builtin_strlen((str)) :       \
-		nolibc_strlen((str));           \
+#define strlen(str) ({             \
+	__builtin_constant_p((str)) ?  \
+		__builtin_strlen((str)) :  \
+		nolibc_strlen((str));      \
 })
 
 #define xstr(a) str(a)
@@ -21,7 +25,7 @@ typedef struct {
 	__builtin_strlen(__FILE__ ":" xstr(__LINE__) "\n"))
 
 #define WRITESTR(str) ({\
-	write(0, (str), strlen(str));\
+	write(STDOUT, (str), strlen(str));\
 })
 
 #define SYSCHECK(expr) ({\
@@ -29,7 +33,7 @@ typedef struct {
 	if(res < 0) {\
 		WRITESTR(__FILE__ ":" xstr(__LINE__) " syscall error ");\
 		intstr str = int_to_str(res);\
-		write(0, str.str, strlen(str.str));\
+		write(STDOUT, str.str, strlen(str.str));\
 		WRITESTR("\n");\
 		exit(-res);\
 	}\
@@ -37,7 +41,7 @@ typedef struct {
 })
 
 #define WRITE_ERR(str, err) ({\
-	WRITESTR(str);\
+	WRITESTR((str));\
 	WRITESTR(": ");\
 	write_int(err);\
 	WRITESTR("\n");\

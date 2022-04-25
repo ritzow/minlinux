@@ -76,6 +76,12 @@ Based on nolibc.h, located in the Linux source tree at tools/include/nolibc
 /* capabilities(7): capget/capset */
 #include <linux/capability.h>
 
+/* fstatat(2) */
+#include <asm/stat.h>
+
+/* close_range(2) */
+#include <linux/close_range.h>
+
 /* For mmap, always this value on x86_64 */
 #define PAGE_SIZE 4096
 
@@ -297,6 +303,12 @@ LOCAL int sched_yield(void) {
 	return my_syscall0(__NR_sched_yield);
 }
 
+LOCAL ssize_t copy_file_range(int fd_in, off64_t *off_in,
+						int fd_out, off64_t *off_out,
+						size_t len, unsigned int flags) {
+	return my_syscall6(__NR_copy_file_range, fd_in, off_in, fd_out, off_out, len, flags);
+}
+
 LOCAL off_t lseek(int fd, off_t offset, int whence) {
 	return my_syscall3(__NR_lseek, fd, offset, whence);
 }
@@ -348,12 +360,17 @@ LOCAL int close(int fd) {
 	return my_syscall1(__NR_close, fd);
 }
 
+LOCAL int close_range(unsigned int first, unsigned int last, unsigned int flags) {
+	return my_syscall3(__NR_close_range, first, last, flags);
+}
+
+LOCAL int close_all_files() {
+	return close_range(0, ~0U, 0);
+}
+
 LOCAL int dup3(int oldfd, int newfd, int flags) {
 	return my_syscall3(__NR_dup3, oldfd, newfd, flags);
 }
-
-//LOCAL int execveat(int dirfd, const char *filename, char *const argv[], 
-//		char *const envp[], int flags) {
 
 LOCAL int execveat(int dirfd, const char * filename, char * const argv[], 
 		char * const envp[], int flags) {
@@ -370,6 +387,10 @@ LOCAL pid_t getpid(void) {
 
 LOCAL int ioctl(int fd, unsigned long req, void *value) {
 	return my_syscall3(__NR_ioctl, fd, req, value);
+}
+
+LOCAL int memfd_create(unsigned int flags) {
+	return my_syscall2(__NR_memfd_create, "",  flags);
 }
 
 LOCAL intptr_t mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
@@ -459,6 +480,11 @@ LOCAL int pivot_root(const char * new_root, const char * put_old) {
 
 LOCAL int sysinfo(struct sysinfo * info) {
 	return my_syscall1(__NR_sysinfo, info);
+}
+
+LOCAL int fstatat(int dirfd, const char *restrict pathname,
+			struct stat *restrict statbuf, int flags) {
+	return my_syscall4(__NR_newfstatat, dirfd, pathname, statbuf, flags);
 }
 
 LOCAL int prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5) {

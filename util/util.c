@@ -99,5 +99,5 @@ const char *ltoa(long in) {
 
 void write_int(uint64_t val) {
 	const char * str = ltoa(val);
-	write(0, str, strlen(str));
+	write(STDOUT, str, strlen(str));
 }

@@ -7,10 +7,6 @@
 /* for struct iovec */
 #include <linux/uio.h>
 
-#define STDIN 0
-#define STDOUT 1
-#define STDERR 2
-
 void init(uring_queue *);
 void handle(uring_queue *, struct io_uring_cqe *, int argc, char * argv[argc], char * envp[]);
 void process_input(uring_queue *, struct io_uring_cqe *, int argc, char * argv[argc], 
@@ -43,13 +39,16 @@ enum {
 
 __attribute__((noreturn))
 void start(int argc, char * argv[], char * envp[]) {
-	// specific serial port is at /sys/devices/platform/serial8250/tty
-	int con = SYSCHECK(open("/dev/console", O_APPEND | O_RDWR, 0));
-	SYSCHECK(dup3(con, 1, 0));
-	SYSCHECK(dup3(con, 2, 0));
-
-	SYSCHECK(mount(NULL, "/proc", "proc", MS_NOEXEC /* | MS_RDONLY */, NULL));
+	SYSCHECK(mount(NULL, "/proc", "proc", MS_NOEXEC, NULL));
 	SYSCHECK(mount(NULL, "/sys", "sysfs", MS_NOEXEC | MS_RDONLY, NULL));
+	SYSCHECK(mount(NULL, "/dev", "devtmpfs", MS_NOEXEC, NULL));
+
+	// specific serial port is at /sys/devices/platform/serial8250/tty
+	int con = SYSCHECK(open("/dev/console", O_RDONLY, 0));
+	int stdout = SYSCHECK(open("/dev/console", O_APPEND | O_WRONLY, 0));
+	SYSCHECK(dup3(stdout, 2, 0));
+
+	WRITESTR("test test test\n");
 
 	int printkfd = SYSCHECK(open("/proc/sys/kernel/printk", O_WRONLY, 0));
 	SYSCHECK(write(printkfd, "0", 1));
@@ -63,7 +62,13 @@ void start(int argc, char * argv[], char * envp[]) {
 
 	init(&uring);
 
-	while(true) {
+	//process_command("run busybox ip link set lo up", &uring, argc, argv, envp);
+	//process_command("run busybox ip link set eth0 up", &uring, argc, argv, envp);
+	//process_command("run busybox udhcpc -f -n -q", &uring, argc, argv, envp);
+	//process_command("run busybox ip a add 10.0.2.15 dev eth0", &uring, argc, argv, envp);
+	//process_command("run busybox sh", &uring, argc, argv, envp);
+
+	while (true) {
 		uring_wait(&uring, 1);
 		struct io_uring_cqe * cqe = uring_result(&uring);
 		if(cqe != NULL) {

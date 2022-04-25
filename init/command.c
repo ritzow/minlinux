@@ -6,18 +6,24 @@
 #define CMD_PROTO(name) void name(uring_queue * uring, int argc, \
 	char * argv[argc], char * envp[], char * next)
 
+#if ARG_MAX <= 32
+#define MAX_ARGS ARG_MAX
+#else
+#define MAX_ARGS 32
+#endif
+
 void dirlist(uring_queue *, const char *);
 char * find_arg(char *);
 char * terminate_arg(char *);
 bool streq(const char *, const char *);
-void run(uring_queue *, const char *, char *);
-void exec_prog(const char *, char *);
+void busybox(char *, char *);
+void fill_args(size_t maxargs, char *args[maxargs], char *);
 void print_time(void);
 
 CMD_PROTO(cmd_time);
 CMD_PROTO(cmd_ls);
 CMD_PROTO(cmd_cat);
-CMD_PROTO(cmd_run);
+CMD_PROTO(cmd_memrun);
 CMD_PROTO(cmd_env);
 CMD_PROTO(cmd_exit);
 CMD_PROTO(cmd_usage);
@@ -30,10 +36,10 @@ struct {
 	{"time", cmd_time},
 	{"ls", cmd_ls},
 	{"cat", cmd_cat},
-	{"run", cmd_run},
 	{"env", cmd_env},
 	{"exit", cmd_exit},
-	{"usage", cmd_usage}
+	{"usage", cmd_usage},
+	{"memrun", cmd_memrun}
 };
 
 void process_command(char * args, uring_queue * uring, int argc, 
@@ -53,9 +59,7 @@ void process_command(char * args, uring_queue * uring, int argc,
 		}
 	}
 
-	WRITESTR("Unknown command \"");
-	WRITESTR(prog);
-	WRITESTR("\"\n");
+	busybox(prog, next);
 }
 
 CMD_PROTO(cmd_time) {
@@ -97,51 +101,13 @@ CMD_PROTO(cmd_cat) {
 		int result;
 		while((result = read(fd, buffer, sizeof buffer)) > 0) {
 			int wrresult;
-			if((wrresult = write(0, buffer, result)) < 0) {
+			if((wrresult = write(STDOUT, buffer, result)) < 0) {
 				WRITE_ERR("Error writing to stdout", wrresult);
 			}
 		}
 
 		if(result < 0) {
 			WRITE_ERR("Error reading file", result);
-		}
-	}
-}
-
-CMD_PROTO(cmd_run) {
-	char * path = find_arg(next);
-	if(path == NULL) {
-		WRITESTR("No file path specified.\n");
-	} else {
-		char * next = terminate_arg(path);
-		struct clone_args cl_args = {
-			.flags = 0 /* CLONE_NEWNET | CLONE_NEWIPC | CLONE_NEWCGROUP |
-				CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUSER | CLONE_NEWUTS
-				| CLONE_CLEAR_SIGHAND */,
-			.exit_signal = SIGCHLD
-		};
-		pid_t tid = clone3(&cl_args, sizeof(struct clone_args));
-		uint32_t mutex = 0;
-		if(tid > 0) {
-			WRITESTR("Forked process ");
-			write_int(tid);
-			WRITESTR("\n");
-
-			siginfo_t siginfo;
-			SYSCHECK(waitid(P_PID, tid, &siginfo, WEXITED, NULL));
-
-			WRITESTR("Child process ");
-			write_int(siginfo.si_pid);
-			WRITESTR(" exited with status ");
-			write_int(siginfo.si_status);
-			WRITESTR("\n");
-		} else if(tid == 0) {
-			//SYSCHECK(setuid(1));
-			//__u32 caps = CAP_TO_MASK();
-			//setcap(caps, caps, caps);
-			exec_prog(path, next);
-		} else {
-			WRITE_ERR("clone3 error", tid);
 		}
 	}
 }
@@ -167,57 +133,175 @@ CMD_PROTO(cmd_usage) {
 	WRITESTR(" bytes\n");
 }
 
-void exec_prog(const char * path, char * next) {
-	//use memfd_create to load file into memory first and exec from memory?
-	struct open_how how = {
-		.flags = O_PATH | O_CLOEXEC
+CMD_PROTO(cmd_memrun) {
+	char *path = find_arg(next);
+	if (path == NULL) {
+		WRITESTR("No file path specified.\n");
+	} else {
+		char *next = terminate_arg(path);
+		struct clone_args cl_args = {
+			.flags = 0,
+			.exit_signal = SIGCHLD
+		};
+		pid_t tid = clone3(&cl_args, sizeof(struct clone_args));
+		if (tid > 0) {
+			WRITESTR("Forked process ");
+			write_int(tid);
+			WRITESTR("\n");
+
+			siginfo_t siginfo;
+			SYSCHECK(waitid(P_PID, tid, &siginfo, WEXITED, NULL));
+
+			WRITESTR("Child process ");
+			write_int(siginfo.si_pid);
+			WRITESTR(" exited with status ");
+			write_int(siginfo.si_status);
+			WRITESTR("\n");
+		} else if (tid == 0) {
+			char *args[MAX_ARGS];
+
+			/* Fill in args */
+			args[0] = (char *)path;
+			fill_args(MAX_ARGS - 1, &args[1], next);
+
+			/* Empty environment */
+			char *envp[] = {
+				NULL
+			};
+
+			close_all_files();
+
+			int stdin = SYSCHECK(open("/dev/console", O_RDONLY, 0));
+			int stdout = SYSCHECK(open("/dev/console", O_APPEND | O_WRONLY, 0));
+			SYSCHECK(dup3(stdout, 2, 0));
+
+			int memfd = memfd_create(0);
+			struct open_how how = {
+				.flags = O_CLOEXEC
+			};
+
+			int infd = SYSCHECK(openat2(AT_FDCWD, path, &how, sizeof(struct open_how)));
+
+			struct stat stats;
+
+			SYSCHECK(fstatat(infd, "", &stats, AT_EMPTY_PATH));
+
+			off64_t in = 0, out = 0;
+
+			SYSCHECK(copy_file_range(infd, &in, memfd, &out, stats.st_size, 0));
+
+			//exec(memfd, args, envp);
+
+			// https://tejom.github.io/c/linux/containers/docker/2016/10/04/containers-from-scratch-pt1.html
+			// https://news.ycombinator.com/item?id=23167383
+			// https://www.kernel.org/doc/Documentation/filesystems/ramfs-rootfs-initramfs.txt
+			// chroot/pivot_root?
+			static sigset_t nosignals = (sigset_t)0;
+			SYSCHECK(sigprocmask(SIG_SETMASK, &nosignals, NULL));
+			int execres = execveat(memfd, "", args, envp, AT_EMPTY_PATH);
+			WRITE_ERR("execveat returned ", execres);
+		} else {
+			WRITE_ERR("clone3 error", tid);
+		}
+	}
+}
+
+void busybox(char *command, char *next) {
+	next = find_arg(next);
+
+	struct clone_args cl_args = {
+		.flags = 0,
+		.exit_signal = SIGCHLD
 	};
+	pid_t tid = clone3(&cl_args, sizeof(struct clone_args));
+	if (tid > 0) {
+		siginfo_t siginfo;
+		SYSCHECK(waitid(P_PID, tid, &siginfo, WEXITED, NULL));
+		WRITESTR("Busybox exited with status ");
+		write_int(siginfo.si_status);
+		WRITESTR("\n");
+	} else if (tid == 0) {
 
-	int fd = SYSCHECK(openat2(AT_FDCWD, path, &how, sizeof(struct open_how)));
+		char *args[MAX_ARGS];
 
-	int stdout = SYSCHECK(open("/dev/console", O_APPEND | O_RDWR, 0));
+		/* Fill in args */
+		args[0] = "/busybox";
+		args[1] = command;
+		fill_args(MAX_ARGS - 2, &args[2], next);
 
-#if ARG_MAX <= 32
-#define MAX_ARGS ARG_MAX
-#else
-#define MAX_ARGS 32
-#endif
+		/* Empty environment */
+		char *envp[] = {
+			NULL
+		};
 
-	char * args[MAX_ARGS];
+		/* Close all file descriptors, we don't need any of them! */
+		close_all_files();
 
-	/* Fill in args */
-	args[0] = (char *)path;
-	size_t i = 1;
-	while(next != NULL && i < MAX_ARGS) {
-		char * temp = terminate_arg(next);
+		int stdin = SYSCHECK(open("/dev/console", O_RDONLY, 0));
+		int stdout = SYSCHECK(open("/dev/console", O_APPEND | O_WRONLY, 0));
+		SYSCHECK(dup3(stdout, 2, 0));
+
+		// https://tejom.github.io/c/linux/containers/docker/2016/10/04/containers-from-scratch-pt1.html
+		// https://news.ycombinator.com/item?id=23167383
+		// https://www.kernel.org/doc/Documentation/filesystems/ramfs-rootfs-initramfs.txt
+		// chroot/pivot_root?
+
+		static sigset_t nosignals = (sigset_t)0;
+
+		SYSCHECK(sigprocmask(SIG_SETMASK, &nosignals, NULL));
+
+		int execres = execveat(AT_FDCWD, "/busybox", args, envp, 0);
+		WRITE_ERR("execveat returned ", execres);
+	} else {
+		WRITE_ERR("clone3 error", tid);
+	}
+}
+
+void fill_args(size_t maxargs, char *args[maxargs], char * next) {
+	size_t i = 0;
+	while (next != NULL && i < maxargs) {
+		char *temp = terminate_arg(next);
 		args[i] = next;
 		next = find_arg(temp);
 		i++;
 	}
-	if(i == MAX_ARGS) {
+
+	if (i == MAX_ARGS) {
 		WRITESTR("Truncated to ");
 		write_int(MAX_ARGS);
 		WRITESTR(" args\n");
 	} else {
 		args[i] = NULL;
 	}
+}
 
-	/* Empty environment */
-	char * envp[] = {
-		NULL
+// void exec(int file, char ** args, char *envp[]) {
+// 	// SYSCHECK(setuid(1));
+// 	//__u32 caps = CAP_TO_MASK();
+// 	// setcap(caps, caps, caps);
+
+// 	int stdin = SYSCHECK(open("/dev/console", O_RDONLY, 0));
+// 	int stdout = SYSCHECK(open("/dev/console", O_APPEND | O_WRONLY, 0));
+// 	SYSCHECK(dup3(stdout, 2, 0));
+
+// 	// https://tejom.github.io/c/linux/containers/docker/2016/10/04/containers-from-scratch-pt1.html
+// 	// https://news.ycombinator.com/item?id=23167383
+// 	// https://www.kernel.org/doc/Documentation/filesystems/ramfs-rootfs-initramfs.txt
+// 	// chroot/pivot_root?
+
+// 	static sigset_t nosignals = (sigset_t)0;
+
+// 	SYSCHECK(sigprocmask(SIG_SETMASK, &nosignals, NULL));
+
+// 	int execres = execveat(file, "", args, envp, AT_EMPTY_PATH);
+// 	WRITE_ERR("execveat returned ", execres);
+// }
+
+int pathfd(const char * path) {
+	struct open_how how = {
+		.flags = O_PATH | O_CLOEXEC
 	};
-
-	//https://tejom.github.io/c/linux/containers/docker/2016/10/04/containers-from-scratch-pt1.html
-	//https://news.ycombinator.com/item?id=23167383
-	//https://www.kernel.org/doc/Documentation/filesystems/ramfs-rootfs-initramfs.txt
-	//chroot/pivot_root?
-
-	static sigset_t nosignals = (sigset_t)0;
-
-	SYSCHECK(sigprocmask(SIG_SETMASK, &nosignals, NULL));
-
-		int execres = execveat(fd, "", args, envp, AT_EMPTY_PATH);
-	WRITE_ERR("execveat returned ", execres);
+	return SYSCHECK(openat2(AT_FDCWD, path, &how, sizeof(struct open_how)));
 }
 
 void dirlist(uring_queue *uring, const char * path) {
@@ -237,7 +321,7 @@ void dirlist(uring_queue *uring, const char * path) {
 		count = getdents64(rootdir, (struct linux_dirent64*)&buffer, sizeof buffer);
 		for(int64_t pos = 0; pos < count;) {
 			struct linux_dirent64 * entry = (struct linux_dirent64*)(buffer + pos);
-			write(0, entry->d_name, strlen(entry->d_name));
+			write(STDOUT, entry->d_name, strlen(entry->d_name));
 			switch(entry->d_type) {
 				case DT_DIR:
 					WRITESTR("/\n");
