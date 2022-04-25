@@ -31,6 +31,7 @@ dropbear_config: Posix = kernel_project.joinpath('dropbear_options.h')
 dropbear_configure: Posix = dropbear_source.joinpath('configure')
 output_dropbear: Posix = output_bin.joinpath('dropbear')
 output_dropbear_config: Posix = dropbear_source.joinpath('localoptions.h')
+dropbear_elf: Posix = output_dropbear.joinpath('sbin').joinpath('dropbear')
 
 # musl
 

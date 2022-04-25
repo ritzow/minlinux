@@ -74,13 +74,11 @@ def generate_initramfs():
 			'file /init ' + str(util.places.output_init_elf) + ' 777 0 0',
 			'file /hello ' + str(util.places.output_bin.joinpath('hello')) + ' 777 0 0',
 			'file /busybox /home/ritzow/busybox 777 0 0',
+			'file /dropbear ' + str(util.places.dropbear_elf) + ' 777 0 0',
 			'dir /proc 777 0 0',
 			'dir /sys 777 0 0',
 			'dir /dev 777 0 0',
-			'nod /dev/console 777 0 0 c 5 1'
 		)
-		#TODO build initramfs
-
 		PosixPath(util.places.output_kernel_initramfs) \
 			.write_bytes(initramfs.encode(encoding='UTF-8'))
 
@@ -156,7 +154,9 @@ def run_efi():
 		shutil.which('qemu-system-x86_64'), '-vga', 'none', 
 		'-nographic', '-sandbox', 'on',
 		'-kernel', str(kernel_path()),
-		'-append', 'console=ttyS0',
+		'-device', 'e1000,netdev=net0',
+		'-netdev', 'user,id=net0,hostfwd=tcp::5555-:22',
+		'-append', 'console=ttyS0', #does rdinit= work to set the /init path
 		'-bios', '/usr/share/ovmf/OVMF.fd'
 	])
 
@@ -175,3 +175,4 @@ def diff_configs():
 def configure():
 	'''Open the Linux kernel menuconfig to edit the installed kernel config'''
 	kernel_target("menuconfig")
+	save_config()

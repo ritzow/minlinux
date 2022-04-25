@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import itertools
 
+# TODO need to check for header file changes still
+
 def gcc(inputs : List[PurePosixPath], output : PurePosixPath, flags : List[str]):
 	import util.log
 	util.log.log('Generate \'' + str(output) + '\'')
@@ -21,7 +23,8 @@ def gcc(inputs : List[PurePosixPath], output : PurePosixPath, flags : List[str])
 		'-march=x86-64',
 		'-o', str(output), *flags,
 		*[str(f) for f in inputs]]
-	subprocess.run(args, stderr=subprocess.STDOUT)
+	if subprocess.run(args, stderr=subprocess.STDOUT).returncode != 0:
+		raise RuntimeError
 
 def out_file(input : PurePosixPath) -> PurePosixPath:
 	rel = input.relative_to(util.places.project_root).with_suffix('.o')
