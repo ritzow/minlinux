@@ -7,6 +7,9 @@ import util.places
 
 from pathlib import Path, PosixPath, PurePosixPath
 import shutil
+import urllib.request
+import hashlib
+import http
 
 def config_modify(*args : str):
 	subprocess.run([
@@ -64,6 +67,7 @@ def signing_key():
 def lines(*strs) -> str:
 	return '\n'.join(list(strs))
 
+#TODO use gen_init_cpio from kernel
 @requires()
 def generate_initramfs():
 	'''Generate list of directives for files to include in 
@@ -72,7 +76,7 @@ def generate_initramfs():
 		initramfs = lines(
 			#this only works if it is named /init (required by linux initramfs)
 			'file /init ' + str(util.places.output_init_elf) + ' 777 0 0',
-			'file /hello ' + str(util.places.output_bin.joinpath('hello')) + ' 777 0 0',
+			#'file /hello ' + str(util.places.output_bin.joinpath('hello')) + ' 777 0 0',
 			'file /busybox /home/ritzow/busybox 777 0 0',
 			'file /dropbear ' + str(util.places.dropbear_elf) + ' 777 0 0',
 			'dir /proc 777 0 0',
@@ -156,12 +160,12 @@ def run_efi():
 		'-kernel', str(kernel_path()),
 		'-device', 'e1000,netdev=net0',
 		'-netdev', 'user,id=net0,hostfwd=tcp::5555-:22',
-		'-append', 'console=ttyS0', #does rdinit= work to set the /init path
+		'-append', 'console=ttyS0',
 		'-bios', '/usr/share/ovmf/OVMF.fd'
 	])
 
 @requires()
-def kernel_info():
+def kernel_size():
 	print('Kernel size: ' + str(PosixPath(kernel_path()).stat().st_size) + ' bytes')
 
 @requires()
@@ -176,3 +180,26 @@ def configure():
 	'''Open the Linux kernel menuconfig to edit the installed kernel config'''
 	kernel_target("menuconfig")
 	save_config()
+
+# If running from alpine, the system can be compiled from source using:
+# $ sudo apk add abuild
+# $ sudo addgroup your-user abuild
+# --- log out and log in ---
+# $ abuild-keygen -a
+# --- copy your pub key in ~/.abuild/ to /etc/apk/keys/
+# $ git clone git://git.alpinelinux.org/aports
+# $ cd aports/scripts
+# $ mkdir outdir workdir
+# $ ./mkimage.sh --arch x86_64 --hostkeys --profile minirootfs \
+# 	--outdir outdir --workdir workdir
+# https://lists.sr.ht/~sircmpwn/alpine-devel/<64c0f770-c27c-70f9-3518-ceb07576c21f%40linux.ibm.com>
+
+@requires()
+def alpine_rootfs():
+	with urllib.request.urlopen("https://raw.githubusercontent.com/alpinelinux/alpine-make-rootfs/v0.6.0/alpine-make-rootfs") as con:
+		data = con.read()
+		assert hashlib.sha1(data).hexdigest() == 'c9cfea712709df162f4dcf26e2b1422aadabad43'
+		# subprocess.run(shutil.which('sh'),  '-s' #-s read from stdin and interpret the rest of the args as args to the script
+		# 	'--branch', 'v3.16',
+		# 	#'--packages'
+		# )

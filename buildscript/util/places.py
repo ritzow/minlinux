@@ -24,6 +24,8 @@ output_manual: Posix = output.joinpath('manual')
 output_init: Posix = output_bin.joinpath('init')
 output_init_elf: Posix = output_init.joinpath('init')
 
+output_alpine_rootfs: Posix = output.joinpath('alpine')
+
 # Dropbear
 
 dropbear_source: Posix = project_root.joinpath('dropbear')
