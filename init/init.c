@@ -48,25 +48,28 @@ void start(int argc, char * argv[], char * envp[]) {
 	int stdout = SYSCHECK(open("/dev/console", O_APPEND | O_WRONLY, 0));
 	SYSCHECK(dup3(stdout, 2, 0));
 
-	WRITESTR("test test test\n");
-
 	int printkfd = SYSCHECK(open("/proc/sys/kernel/printk", O_WRONLY, 0));
 	SYSCHECK(write(printkfd, "0", 1));
 	SYSCHECK(close(printkfd));
 
 	uring_queue uring = uring_init(16);
 
-	/* Ignore all signals because they are handled by signalfd, 
-	   will cause weird behavior for waitid on children, see waitid(2) */
+	/* Ignore all signals because they are handled by signalfd */
 	SYSCHECK(sigprocmask(SIG_SETMASK, &allsignals, NULL));
 
 	init(&uring);
 
-	//process_command("run busybox ip link set lo up", &uring, argc, argv, envp);
-	//process_command("run busybox ip link set eth0 up", &uring, argc, argv, envp);
-	//process_command("run busybox udhcpc -f -n -q", &uring, argc, argv, envp);
-	//process_command("run busybox ip a add 10.0.2.15 dev eth0", &uring, argc, argv, envp);
-	//process_command("run busybox sh", &uring, argc, argv, envp);
+	char uplo[] = "ip link set lo up";
+	char upeth[] = "ip link set eth0 up";
+	char dhcp[] = "udhcpc -f -n -q";
+	char addrset[] = "ip a add 10.0.2.15 dev eth0";
+	char runsh[] = "sh";
+
+	process_command(uplo, &uring, argc, argv, envp);
+	process_command(upeth, &uring, argc, argv, envp);
+	process_command(dhcp, &uring, argc, argv, envp);
+	process_command(addrset, &uring, argc, argv, envp);
+	process_command(runsh, &uring, argc, argv, envp);
 
 	while (true) {
 		uring_wait(&uring, 1);
@@ -76,8 +79,6 @@ void start(int argc, char * argv[], char * envp[]) {
 			uring_advance(&uring);
 		}
 	}
-
-	//uring_close(&uring);
 }
 
 char buffer[1024];
@@ -110,26 +111,6 @@ void handle(uring_queue * restrict uring, struct io_uring_cqe * restrict cqe, in
 
 void process_signal() {
 	switch(siginfo.ssi_signo) {
-		case SIGCHLD: {
-			/* See sigaction(2) for siginfo field meanings for SIGCHLD */
-			/* siginfo_t info;
-			SYSCHECK(waitid(P_PID, siginfo.ssi_pid, &info, WEXITED | WNOHANG, NULL));
-			WRITESTR("Child process ");
-			write_int(siginfo.ssi_pid);
-			WRITESTR(" exited with status ");
-			write_int(siginfo.ssi_status);
-			WRITESTR("\n");
-			break; */
-			break;
-		}
-		/* case SIGILL:
-		case SIGINT:
-		case SIGQUIT:
-		case SIGTERM:
-		case SIGSEGV:
-			WRITESTR("Received signal, powering off\n");
-			reboot_hard(LINUX_REBOOT_CMD_POWER_OFF);
-			break; */
 		default:
 			WRITESTR("Received signal number ");
 			write_int(siginfo.ssi_signo);
