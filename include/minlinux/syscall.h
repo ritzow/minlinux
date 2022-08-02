@@ -82,6 +82,18 @@ Based on nolibc.h, located in the Linux source tree at tools/include/nolibc
 /* close_range(2) */
 #include <linux/close_range.h>
 
+/* For iovec struct used by msghdr sendmmsg */
+#include <linux/uio.h>
+
+/* For kernel sa_family_t */
+#include <linux/socket.h>
+
+/* Ethernet packet types */
+#include <linux/if_ether.h>
+
+/* Ethernet link-layer structs */
+#include <linux/if_packet.h>
+
 /* For mmap, always this value on x86_64 */
 #define PAGE_SIZE 4096
 
@@ -313,6 +325,10 @@ LOCAL off_t lseek(int fd, off_t offset, int whence) {
 	return my_syscall3(__NR_lseek, fd, offset, whence);
 }
 
+LOCAL int umask(mode_t mask) {
+	return my_syscall1(__NR_umask, mask);
+}
+
 LOCAL int mkdir(const char *path, mode_t mode) {
 	return my_syscall3(__NR_mkdirat, AT_FDCWD, path, mode);
 }
@@ -512,6 +528,99 @@ LOCAL int setcap(__u32 effective, __u32 permitted, __u32 inheritable) {
 	};
 
 	return my_syscall2(__NR_capset, &hdr, &data);
+}
+
+/* Supported address families. */
+#define AF_UNSPEC 0
+#define AF_UNIX 1	   /* Unix domain sockets 		*/
+#define AF_LOCAL 1	   /* POSIX name for AF_UNIX	*/
+#define AF_INET 2	   /* Internet IP Protocol 	*/
+#define AF_AX25 3	   /* Amateur Radio AX.25 		*/
+#define AF_IPX 4	   /* Novell IPX 			*/
+#define AF_APPLETALK 5 /* AppleTalk DDP 		*/
+#define AF_NETROM 6	   /* Amateur Radio NET/ROM 	*/
+#define AF_BRIDGE 7	   /* Multiprotocol bridge 	*/
+#define AF_ATMPVC 8	   /* ATM PVCs			*/
+#define AF_X25 9	   /* Reserved for X.25 project 	*/
+#define AF_INET6 10	   /* IP version 6			*/
+#define AF_ROSE 11	   /* Amateur Radio X.25 PLP	*/
+#define AF_DECnet 12   /* Reserved for DECnet project	*/
+#define AF_NETBEUI 13  /* Reserved for 802.2LLC project*/
+#define AF_SECURITY 14 /* Security callback pseudo AF */
+#define AF_KEY 15	   /* PF_KEY key management API */
+#define AF_NETLINK 16
+#define AF_ROUTE AF_NETLINK /* Alias to emulate 4.4BSD */
+#define AF_PACKET 17		/* Packet family		*/
+#define AF_ASH 18			/* Ash				*/
+#define AF_ECONET 19		/* Acorn Econet			*/
+#define AF_ATMSVC 20		/* ATM SVCs			*/
+#define AF_RDS 21			/* RDS sockets 			*/
+#define AF_SNA 22			/* Linux SNA Project (nutters!) */
+#define AF_IRDA 23			/* IRDA sockets			*/
+#define AF_PPPOX 24			/* PPPoX sockets		*/
+#define AF_WANPIPE 25		/* Wanpipe API Sockets */
+#define AF_LLC 26			/* Linux LLC			*/
+#define AF_IB 27			/* Native InfiniBand address	*/
+#define AF_MPLS 28			/* MPLS */
+#define AF_CAN 29			/* Controller Area Network      */
+#define AF_TIPC 30			/* TIPC sockets			*/
+#define AF_BLUETOOTH 31		/* Bluetooth sockets 		*/
+#define AF_IUCV 32			/* IUCV sockets			*/
+#define AF_RXRPC 33			/* RxRPC sockets 		*/
+#define AF_ISDN 34			/* mISDN sockets 		*/
+#define AF_PHONET 35		/* Phonet sockets		*/
+#define AF_IEEE802154 36	/* IEEE802154 sockets		*/
+#define AF_CAIF 37			/* CAIF sockets			*/
+#define AF_ALG 38			/* Algorithm sockets		*/
+#define AF_NFC 39			/* NFC sockets			*/
+#define AF_VSOCK 40			/* vSockets			*/
+#define AF_KCM 41			/* Kernel Connection Multiplexor*/
+#define AF_QIPCRTR 42		/* Qualcomm IPC Router          */
+#define AF_SMC 43			/* smc sockets: reserve number for \
+							 * PF_SMC protocol family that     \
+							 * reuses AF_INET address family   \
+							 */
+#define AF_XDP 44			/* XDP sockets			*/
+#define AF_MCTP 45			/* Management component \
+							 * transport protocol   \
+							 */
+
+#define AF_MAX 46 /* For now.. */
+
+enum sock_type {
+	SOCK_STREAM = 1,
+	SOCK_DGRAM = 2,
+	SOCK_RAW = 3,
+	SOCK_RDM = 4,
+	SOCK_SEQPACKET = 5,
+	SOCK_DCCP = 6,
+	SOCK_PACKET = 10,
+};
+
+typedef __kernel_sa_family_t sa_family_t;
+typedef __u32 socklen_t;
+
+struct msghdr {
+	void *msg_name;		   /* Optional address */
+	socklen_t msg_namelen; /* Size of address */
+	struct iovec *msg_iov; /* Scatter/gather array */
+	size_t msg_iovlen;	   /* # elements in msg_iov */
+	void *msg_control;	   /* Ancillary data, see below */
+	size_t msg_controllen; /* Ancillary data buffer len */
+	int msg_flags;		   /* Flags (unused) */
+};
+
+struct mmsghdr {
+	struct msghdr msg_hdr; /* Message header */
+	unsigned int msg_len;  /* Number of bytes transmitted */
+};
+
+LOCAL int socket(int domain, int type, int protocol) {
+	return my_syscall3(__NR_socket, domain, type, protocol);
+}
+
+LOCAL int sendmmsg(int sockfd, struct mmsghdr *msgvec, unsigned int vlen, int flags) {
+	return my_syscall4(__NR_sendmmsg, sockfd, msgvec, vlen, flags);
 }
 
 #endif

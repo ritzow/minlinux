@@ -78,10 +78,6 @@ def generate_initramfs():
 			'file /init ' + str(util.places.output_init_elf) + ' 777 0 0',
 			#'file /hello ' + str(util.places.output_bin.joinpath('hello')) + ' 777 0 0',
 			'file /busybox /home/ritzow/busybox 777 0 0',
-			'file /dropbear ' + str(util.places.dropbear_elf) + ' 777 0 0',
-			'dir /proc 777 0 0',
-			'dir /sys 777 0 0',
-			'dir /dev 777 0 0',
 		)
 		PosixPath(util.places.output_kernel_initramfs) \
 			.write_bytes(initramfs.encode(encoding='UTF-8'))

@@ -1,7 +1,7 @@
 [submodule "linux"]
 	path = linux
 	url = https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
-	branch = v5.17-rc4
+	branch = v5.19
 	shallow = true
 	update = checkout
 [submodule "man-pages"]

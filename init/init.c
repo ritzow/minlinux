@@ -4,8 +4,8 @@
 #include <minlinux/util.h>
 #include "include/command.h"
 
-/* for struct iovec */
-#include <linux/uio.h>
+/* For mode_t creation */
+#include <linux/stat.h>
 
 void init(uring_queue *);
 void handle(uring_queue *, struct io_uring_cqe *, int argc, char * argv[argc], char * envp[]);
@@ -39,6 +39,14 @@ enum {
 
 __attribute__((noreturn))
 void start(int argc, char * argv[], char * envp[]) {
+
+	umask(0);
+
+	/* These permissions will be overwritten by the mounted file systems */
+	SYSCHECK(mkdir("/proc", S_IRWXU | S_IRWXG | S_IRWXO));
+	SYSCHECK(mkdir("/dev", S_IRWXU | S_IRWXG | S_IRWXO));
+	SYSCHECK(mkdir("/sys", S_IRWXU | S_IRWXG | S_IRWXO));
+
 	SYSCHECK(mount(NULL, "/proc", "proc", MS_NOEXEC, NULL));
 	SYSCHECK(mount(NULL, "/sys", "sysfs", MS_NOEXEC | MS_RDONLY, NULL));
 	SYSCHECK(mount(NULL, "/dev", "devtmpfs", MS_NOEXEC, NULL));
@@ -65,11 +73,13 @@ void start(int argc, char * argv[], char * envp[]) {
 	char addrset[] = "ip a add 10.0.2.15 dev eth0";
 	char runsh[] = "sh";
 
-	process_command(uplo, &uring, argc, argv, envp);
-	process_command(upeth, &uring, argc, argv, envp);
-	process_command(dhcp, &uring, argc, argv, envp);
-	process_command(addrset, &uring, argc, argv, envp);
-	process_command(runsh, &uring, argc, argv, envp);
+	SYSCHECK(socket(AF_PACKET, SOCK_DGRAM, __bswap_16(ETH_P_ALL)));
+
+	//process_command(uplo, &uring, argc, argv, envp);
+	//process_command(upeth, &uring, argc, argv, envp);
+	//process_command(dhcp, &uring, argc, argv, envp);
+	//process_command(addrset, &uring, argc, argv, envp);
+	//process_command(runsh, &uring, argc, argv, envp);
 
 	while (true) {
 		uring_wait(&uring, 1);

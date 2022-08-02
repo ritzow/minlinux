@@ -54,6 +54,21 @@ typedef struct {
 
 #define ARRAY_LENGTH(a) (sizeof(a) / sizeof(*a))
 
+/* From https://sites.uclouvain.be/SystInfo/usr/include/bits/byteswap.h.html */
+#define __bswap_constant_16(x) \
+	((((x) >> 8) & 0xff) | (((x)&0xff) << 8))
+
+#define __bswap_16(x) \
+	(__extension__({ register unsigned short int __v, __x = (x);\
+         if (__builtin_constant_p (__x))                        \
+           __v = __bswap_constant_16 (__x);                     \
+         else                                                   \
+           __asm__ ("rorw $8, %w0"                              \
+                    : "=r" (__v)                                \
+                    : "0" (__x)                                 \
+                    : "cc");                                    \
+         __v; }))
+
 void *memmove(void *dst, const void *src, size_t len);
 void *memcpy(void *dst, const void *src, size_t len);
 void *memset(void *dst, int b, size_t len);
