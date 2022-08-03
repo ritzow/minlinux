@@ -73,15 +73,21 @@ void start(int argc, char * argv[], char * envp[]) {
 	char addrset[] = "ip a add 10.0.2.15 dev eth0";
 	char runsh[] = "sh";
 
-	SYSCHECK(socket(AF_PACKET, SOCK_DGRAM, __bswap_16(ETH_P_ALL)));
+	int eth = SYSCHECK(socket(AF_PACKET, SOCK_DGRAM, __bswap_16(ETH_P_ALL)));
+// 	struct ifreq req;
+// #define SIOCGIFINDEX 0x8933
+// 	memcpy(req.ifr_name, "eth0", sizeof "eth0");
+// 	SYSCHECK(ioctl(eth, SIOCGIFINDEX, &req));
+// 	write_int(req.ifr_ifindex);
 
-	//process_command(uplo, &uring, argc, argv, envp);
-	//process_command(upeth, &uring, argc, argv, envp);
-	//process_command(dhcp, &uring, argc, argv, envp);
-	//process_command(addrset, &uring, argc, argv, envp);
-	//process_command(runsh, &uring, argc, argv, envp);
+		// process_command(uplo, &uring, argc, argv, envp);
+		// process_command(upeth, &uring, argc, argv, envp);
+		// process_command(dhcp, &uring, argc, argv, envp);
+		// process_command(addrset, &uring, argc, argv, envp);
+		// process_command(runsh, &uring, argc, argv, envp);
 
-	while (true) {
+		while (true)
+	{
 		uring_wait(&uring, 1);
 		struct io_uring_cqe * cqe = uring_result(&uring);
 		if(cqe != NULL) {
@@ -120,13 +126,13 @@ void handle(uring_queue * restrict uring, struct io_uring_cqe * restrict cqe, in
 }
 
 void process_signal() {
-	switch(siginfo.ssi_signo) {
+	/* switch(siginfo.ssi_signo) {
 		default:
 			WRITESTR("Received signal number ");
 			write_int(siginfo.ssi_signo);
 			WRITESTR("\n");
 			break;
-	}
+	} */
 }
 
 void process_input(uring_queue * restrict uring, struct io_uring_cqe * restrict cqe, 

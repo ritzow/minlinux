@@ -13,11 +13,12 @@ def gcc(inputs : List[PurePosixPath], output : PurePosixPath, flags : List[str])
 	util.log.log('Generate \'' + str(output) + '\'')
 	args = [shutil.which('gcc'), 
 		'-Wall', '-Wextra', '-Werror', '-Wfatal-errors', 
-		#'--verbose',
-		'-fno-builtin',
+		'-fno-builtin', 
+		# Disable standard headers
+		'-nostdinc',
 		'-Wno-unused-parameter', '-Wno-unused-variable',
 		'-fno-asynchronous-unwind-tables', '-fno-ident', 
-		'-O3', '-nostdlib', '-static', '-lgcc', #'-pie',
+		'-O3', '-nostdlib', '-static', '-lgcc', '-pie',
 		'-I', str(util.places.includes), 
 		'-I', str(util.places.output_includes),
 		'-march=x86-64',
